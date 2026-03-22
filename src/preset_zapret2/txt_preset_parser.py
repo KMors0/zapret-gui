@@ -1221,27 +1221,43 @@ def parse_preset_content(content: str) -> PresetData:
         category_entries: List[Tuple[str, str, str]] = []
 
         if categories_from_lists:
-            for list_category, list_mode, list_file in categories_from_lists:
-                mode = (list_mode or "hostlist").strip().lower() or "hostlist"
-                canonical_key = _canonicalize_list_category_key(
-                    category_key=list_category,
-                    filter_mode=mode,
-                    filter_file=list_file,
-                    protocol_hint=base_protocol,
-                    block_args=block_args,
-                )
-                category_entries.append((canonical_key, mode, list_file))
+            # Compound categories (ipset_udp, ipset_tcp_cloudflare, etc.) have
+            # multiple --ipset=/--hostlist= in their base_filter. Per-entry
+            # resolution would split them into individual unknown entries.
+            # Detect and use full-block inference instead.
+            use_inferred_compound = False
+            if inferred_category != "unknown":
+                _ci = (_load_category_info() or {}).get(inferred_category, {})
+                _bf = _ci.get("base_filter") or _ci.get("base_filter_ipset") or _ci.get("base_filter_hostlist") or ""
+                _selector_count = len(re.findall(r'--(ipset|hostlist)=', _bf))
+                if _selector_count > 1:
+                    use_inferred_compound = True
 
-            # Filter out unknown categories (not in categories.txt)
-            # Skip filtering if categories catalog is unavailable (e.g., in tests)
-            categories_info = _load_category_info() or {}
-            if categories_info:
-                category_entries = [
-                    (key, mode, file) for key, mode, file in category_entries
-                    if key in categories_info
-                ]
-                if not category_entries:
-                    continue
+            if use_inferred_compound:
+                fm = "ipset" if re.search(r'--ipset=', block_args) else "hostlist"
+                category_entries = [(inferred_category, fm, "")]
+            else:
+                for list_category, list_mode, list_file in categories_from_lists:
+                    mode = (list_mode or "hostlist").strip().lower() or "hostlist"
+                    canonical_key = _canonicalize_list_category_key(
+                        category_key=list_category,
+                        filter_mode=mode,
+                        filter_file=list_file,
+                        protocol_hint=base_protocol,
+                        block_args=block_args,
+                    )
+                    category_entries.append((canonical_key, mode, list_file))
+
+                # Filter out unknown categories (not in categories.txt)
+                # Skip filtering if categories catalog is unavailable (e.g., in tests)
+                categories_info = _load_category_info() or {}
+                if categories_info:
+                    category_entries = [
+                        (key, mode, file) for key, mode, file in category_entries
+                        if key in categories_info
+                    ]
+                    if not category_entries:
+                        continue
         else:
             if inferred_category != "unknown":
                 category = inferred_category

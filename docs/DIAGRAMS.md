@@ -894,7 +894,6 @@ graph TB
     end
     
     subgraph "Каналы"
-        CHAT[-1003005847271]
         STABLE_TOPIC[топик 1<br/>stable сборки]
         TEST_TOPIC[топик 10854<br/>test сборки]
         ERROR_TOPIC[топик 12681<br/>ошибки]

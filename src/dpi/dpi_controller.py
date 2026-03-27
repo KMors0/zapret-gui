@@ -589,6 +589,7 @@ class DPIController:
         self._dpi_start_thread = None
         self._dpi_stop_thread = None
         self._stop_exit_thread = None
+        self._pending_launch_warnings: list[str] = []
         # Generation token for async start verification.
         # Prevents stale QTimer checks from previous start attempts.
         self._dpi_start_verify_generation = 0
@@ -612,6 +613,57 @@ class DPIController:
         except Exception as e:
             log(f"Не удалось показать InfoBar ошибки запуска: {e}", "DEBUG")
 
+    def _show_launch_warning_top(self, message: str) -> None:
+        text = str(message or "").strip()
+        if not text:
+            return
+        try:
+            while text.startswith(("⚠️", "⚠")):
+                text = text[1:].strip()
+        except Exception:
+            pass
+        if not text:
+            return
+
+        try:
+            if hasattr(self.app, "show_dpi_launch_warning"):
+                self.app.show_dpi_launch_warning(text)
+        except Exception as e:
+            log(f"Не удалось показать InfoBar предупреждения запуска: {e}", "DEBUG")
+
+    def _collect_soft_launch_warnings(self, selected_mode, launch_method: str) -> list[str]:
+        method = str(launch_method or "").strip().lower()
+        if method != "direct_zapret2":
+            return []
+        if not isinstance(selected_mode, dict) or not bool(selected_mode.get("is_preset_file")):
+            return []
+
+        preset_path = str(selected_mode.get("preset_path") or "").strip()
+        if not preset_path or not Path(preset_path).exists():
+            return []
+
+        try:
+            from preset_zapret2.out_range_warnings import collect_missing_out_range_labels_from_file
+
+            labels = collect_missing_out_range_labels_from_file(preset_path)
+        except Exception as e:
+            log(f"Не удалось собрать предупреждения out-range для запуска: {e}", "DEBUG")
+            return []
+
+        if not labels:
+            return []
+
+        max_show = 5
+        shown = labels[:max_show]
+        hidden = len(labels) - len(shown)
+        message = (
+            "У некоторых фильтров не задан explicit out-range; helper args будут применяться "
+            f"без сужения: {', '.join(shown)}"
+        )
+        if hidden > 0:
+            message += f" (+{hidden} ещё)"
+        return [message]
+
     def start_dpi_async(self, selected_mode=None, launch_method=None):
         """Асинхронно запускает DPI без блокировки UI
 
@@ -626,6 +678,8 @@ class DPIController:
                 return
         except RuntimeError:
             self._dpi_start_thread = None
+
+        self._pending_launch_warnings = []
 
         # Проверка конфликтующих процессов (Process Hacker, Process Explorer и т.д.)
         conflicting = check_conflicting_processes()
@@ -808,6 +862,8 @@ class DPIController:
                 self.app.set_status("❌ Неизвестный метод запуска")
                 self._show_launch_error_top("Неизвестный метод запуска")
                 return
+
+        self._pending_launch_warnings = self._collect_soft_launch_warnings(selected_mode, launch_method)
         
         # ✅ ОБРАБОТКА всех типов стратегий (остальной код без изменений)
         mode_name = "Неизвестная стратегия"
@@ -1124,11 +1180,19 @@ class DPIController:
                     self.app._first_dpi_start = False
             except Exception as e:
                 log(f"Discord restart check error: {e}", "DEBUG")
+
+            pending_warnings = list(getattr(self, "_pending_launch_warnings", []) or [])
+            self._pending_launch_warnings = []
+            for warning_text in pending_warnings:
+                log(f"Launch warning: {warning_text}", "WARNING")
+                QTimer.singleShot(150, lambda text=warning_text: self._show_launch_warning_top(text))
         else:
             # Процесс не запустился или сразу упал
             log("DPI не запустился - процесс не найден после старта", "❌ ERROR")
             self.app.set_status("❌ Процесс не запустился. Проверьте логи")
             self._show_launch_error_top("Процесс не запустился. Проверьте логи")
+
+            self._pending_launch_warnings = []
 
             if hasattr(self.app, 'ui_manager'):
                 self.app.ui_manager.update_ui_state(running=False)

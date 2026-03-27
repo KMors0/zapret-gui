@@ -1,55 +1,5 @@
 # presets/__init__.py
-"""
-Preset system for direct_zapret2 mode.
-
-Presets are stored as txt files in %APPDATA%/zapret/presets_v2/.
-Each preset contains:
-- Metadata (name, created, modified)
-- Base arguments (lua-init, wf-*, blobs)
-- Category configurations (youtube, discord, etc.)
-
-Switching presets = selecting a source preset + regenerating runtime config + DPI reload.
-
-Usage:
-    from presets import PresetManager, Preset
-
-    manager = PresetManager()
-
-    # List available presets
-    presets = manager.list_presets()
-
-    # Switch to a preset
-    manager.switch_preset("Gaming")
-
-    # Get current preset
-    preset = manager.get_active_preset()
-
-    # Create new preset from current configuration
-    manager.create_preset_from_current("My Backup")
-
-    # Edit preset
-    preset = manager.load_preset("Default")
-    preset.categories["youtube"].tcp_args = "--lua-desync=multisplit:pos=1"
-    manager.save_preset(preset)
-
-Low-level API:
-    from presets import (
-        get_presets_dir,
-        list_presets,
-        load_preset,
-        save_preset,
-        delete_preset,
-        rename_preset,
-    )
-
-Parser API (for txt files):
-    from presets.txt_preset_parser import (
-        parse_preset_file,
-        generate_preset_file,
-        PresetData,
-        CategoryBlock,
-    )
-"""
+"""Preset system for direct_zapret2 source presets and generated runtime config."""
 
 from pathlib import Path
 
@@ -61,7 +11,6 @@ from .preset_storage import (
     delete_preset,
     duplicate_preset,
     export_preset,
-    get_active_preset_name,
     get_active_preset_path,
     get_preset_path,
     get_presets_dir,
@@ -72,7 +21,6 @@ from .preset_storage import (
     preset_exists,
     rename_preset,
     save_preset,
-    set_active_preset_name,
 )
 
 # High-level manager
@@ -345,8 +293,8 @@ def restore_builtin_preset(preset_name: str) -> bool:
     """
     Restores a preset from the template in presets_v2_template/.
 
-    Overwrites the preset in presets/ with the template content.
-    If the preset is currently selected, also updates the runtime config.
+    Overwrites the source preset in presets/ with the template content.
+    If the preset is currently selected, regenerates the runtime config.
 
     Returns:
         True if restore was successful, False otherwise
@@ -367,12 +315,18 @@ def restore_builtin_preset(preset_name: str) -> bool:
         _atomic_write_text(preset_path, content, encoding="utf-8")
         log(f"Restored preset '{canonical}' from template to {preset_path}", "INFO")
 
-        # If this preset is currently selected, update runtime config
-        active_name = (get_active_preset_name() or "").strip()
-        if active_name and active_name.lower() == canonical.lower():
-            active_path = get_active_preset_path()
-            _atomic_write_text(active_path, content, encoding="utf-8")
-            log(f"Also updated active preset at {active_path}", "SUCCESS")
+        try:
+            from core.services import get_direct_flow_coordinator
+
+            coordinator = get_direct_flow_coordinator()
+            selected_name = (coordinator.get_selected_preset_name("direct_zapret2") or "").strip()
+        except Exception:
+            coordinator = None
+            selected_name = ""
+
+        if coordinator is not None and selected_name and selected_name.lower() == canonical.lower():
+            profile = coordinator.refresh_selected_runtime("direct_zapret2")
+            log(f"Also regenerated runtime config at {profile.launch_config_path}", "SUCCESS")
 
         return True
 
@@ -428,8 +382,6 @@ __all__ = [
     "duplicate_preset",
     "export_preset",
     "import_preset",
-    "get_active_preset_name",
-    "set_active_preset_name",
     # Manager
     "PresetManager",
     # Central store

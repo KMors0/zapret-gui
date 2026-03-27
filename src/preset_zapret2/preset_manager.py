@@ -1,34 +1,11 @@
 # preset_zapret2/preset_manager.py
-"""
-High-level preset manager for direct_zapret2 mode.
-
-Provides a unified API for:
-- Selecting source presets and regenerating the launch config
-- Creating/editing/deleting presets
-- Managing the selected preset
-
-Usage:
-    manager = PresetManager()
-
-    # List available presets
-    presets = manager.list_presets()
-
-    # Select a preset and regenerate the launch config
-    manager.switch_preset("Gaming")
-
-    # Get current preset
-    preset = manager.get_active_preset()
-
-    # Create from current
-    manager.create_preset_from_current("My Backup")
-"""
+"""Mutation shell for direct_zapret2 source presets and runtime sync."""
 
 import os
 import re
-import shutil
 from datetime import datetime
 from pathlib import Path
-from typing import Callable, Dict, List, Optional, Tuple
+from typing import Callable, List, Optional
 
 from log import log
 
@@ -40,30 +17,15 @@ from .preset_model import (
     normalize_preset_icon_color,
     validate_preset,
 )
-from .ports import subtract_port_specs, union_port_specs
 from .preset_storage import (
-    get_active_preset_name,
-    get_active_preset_path,
     get_preset_path,
-    get_presets_dir,
     preset_exists,
     save_preset,
 )
 
 
 class PresetManager:
-    """
-    High-level manager for preset operations.
-
-    Handles:
-    - Preset switching with DPI reload callback
-    - Active preset tracking
-    - Preset validation
-
-    Attributes:
-        on_preset_switched: Callback called after preset switch (name: str)
-        on_dpi_reload_needed: Callback to trigger DPI service reload
-    """
+    """Direct mutation shell over selected source preset state for Zapret 2."""
 
     def __init__(
         self,
@@ -97,13 +59,17 @@ class PresetManager:
 
     def _get_sync_layer(self):
         if self._sync_layer is None:
-            from .sync_layer import Zapret2PresetSyncLayer
+            from .sync_layer import (
+                Zapret2PresetSyncLayer,
+                inject_debug_into_base_args,
+                update_wf_out_ports_in_base_args,
+            )
 
             self._sync_layer = Zapret2PresetSyncLayer(
                 on_dpi_reload_needed=self.on_dpi_reload_needed,
                 invalidate_cache=self._invalidate_active_preset_cache,
-                inject_debug_into_base_args=self._maybe_inject_debug_into_base_args,
-                update_wf_out_ports_in_base_args=self._update_wf_out_ports_in_base_args,
+                inject_debug_into_base_args=inject_debug_into_base_args,
+                update_wf_out_ports_in_base_args=update_wf_out_ports_in_base_args,
             )
         return self._sync_layer
 
@@ -132,19 +98,6 @@ class PresetManager:
             True if preset file exists
         """
         return self._get_store().preset_exists(name)
-
-    def get_preset_count(self) -> int:
-        """
-        Returns number of available presets.
-
-        Returns:
-            Count of preset files
-        """
-        return len(self._get_store().get_preset_names())
-
-    # ========================================================================
-    # LOAD/SAVE OPERATIONS
-    # ========================================================================
 
     def load_preset(self, name: str) -> Optional[Preset]:
         """
@@ -209,7 +162,7 @@ class PresetManager:
             try:
                 return self._get_store().get_active_preset_name()
             except Exception:
-                return get_active_preset_name()
+                return None
 
     def get_active_preset(self) -> Optional[Preset]:
         """
@@ -245,78 +198,6 @@ class PresetManager:
                 return normalize_preset_icon_color(match.group(1).strip())
         return DEFAULT_PRESET_ICON_COLOR
 
-    @staticmethod
-    def _strip_debug_from_base_args(base_args: str) -> str:
-        """ hookup to prevent persisting runtime --debug in preset model """
-        try:
-            lines = (base_args or "").splitlines()
-            kept: list[str] = []
-            for raw in lines:
-                stripped = raw.strip()
-                if not stripped:
-                    continue
-                if stripped.lower().startswith("--debug"):
-                    continue
-                kept.append(stripped)
-            return "\n".join(kept).strip()
-        except Exception:
-            return (base_args or "").strip()
-
-    def _maybe_inject_debug_into_base_args(self, base_args: str) -> str:
-        """
-        Injects or removes a `--debug=@...` line in base_args based on the global setting.
-
-        The setting is stored in HKCU\\{REGISTRY_PATH}\\DirectMethod:
-        - DebugLogEnabled (DWORD)
-        - DebugLogFile (REG_SZ, relative path like "logs/zapret_winws2_debug_....log")
-        """
-        import winreg
-        from datetime import datetime
-        from config import REGISTRY_PATH
-
-        cleaned = self._strip_debug_from_base_args(base_args)
-
-        enabled = False
-        debug_file = ""
-        try:
-            direct_path = rf"{REGISTRY_PATH}\DirectMethod"
-            with winreg.OpenKey(winreg.HKEY_CURRENT_USER, direct_path) as key:
-                value, _ = winreg.QueryValueEx(key, "DebugLogEnabled")
-                enabled = bool(value)
-                try:
-                    debug_file, _ = winreg.QueryValueEx(key, "DebugLogFile")
-                except Exception:
-                    debug_file = ""
-        except Exception:
-            enabled = False
-
-        if not enabled:
-            return cleaned
-
-        if not debug_file:
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            debug_file = f"logs/zapret_winws2_debug_{timestamp}.log"
-            try:
-                direct_path = rf"{REGISTRY_PATH}\DirectMethod"
-                with winreg.CreateKey(winreg.HKEY_CURRENT_USER, direct_path) as key:
-                    winreg.SetValueEx(key, "DebugLogFile", 0, winreg.REG_SZ, debug_file)
-            except Exception:
-                pass
-
-        debug_file_norm = str(debug_file).replace("\\", "/").lstrip("@").lstrip("/")
-        debug_line = f"--debug=@{debug_file_norm}"
-
-        lines = cleaned.splitlines() if cleaned else []
-
-        # Insert after last --lua-init line (if present), otherwise at the top.
-        insert_at = 0
-        for i, raw in enumerate(lines):
-            if raw.strip().startswith("--lua-init="):
-                insert_at = i + 1
-
-        lines.insert(insert_at, debug_line)
-        return "\n".join(lines).strip()
-
     def _get_active_file_mtime(self) -> float:
         """
         Gets modification time of the selected source preset file.
@@ -330,9 +211,6 @@ class PresetManager:
             preset_path = get_direct_flow_coordinator().get_selected_source_path("direct_zapret2")
             if preset_path.exists():
                 return os.path.getmtime(str(preset_path))
-            active_path = get_active_preset_path()
-            if active_path.exists():
-                return os.path.getmtime(str(active_path))
             return 0.0
         except Exception as e:
             log(f"Error getting selected preset mtime: {e}", "WARNING")
@@ -378,58 +256,6 @@ class PresetManager:
         """Notifies the central store that the preset list changed (add/remove/rename)."""
         self._get_store().notify_presets_changed()
 
-    # ========================================================================
-    # SWITCH OPERATIONS
-    # ========================================================================
-
-    def switch_preset(self, name: str, reload_dpi: bool = True) -> bool:
-        """
-        Selects a preset.
-
-        Updates the selected source preset, regenerates the launch config and
-        optionally triggers a DPI reload callback.
-
-        Args:
-            name: Preset name to switch to
-            reload_dpi: Whether to trigger DPI reload after switch
-
-        Returns:
-            True if switched successfully
-        """
-        if not preset_exists(name):
-            log(f"Cannot switch: preset '{name}' not found", "ERROR")
-            return False
-
-        try:
-            from core.services import get_direct_flow_coordinator
-
-            profile = get_direct_flow_coordinator().select_preset("direct_zapret2", name)
-
-            # Invalidate cache after switch
-            self._invalidate_active_preset_cache()
-
-            # Notify central store
-            self._get_store().notify_preset_switched(profile.preset_name)
-
-            if reload_dpi and self.on_dpi_reload_needed:
-                self.on_dpi_reload_needed()
-
-            log(f"Switched to preset '{profile.preset_name}'", "INFO")
-
-            # Callbacks (legacy, for callers that pass on_preset_switched)
-            if self.on_preset_switched:
-                self.on_preset_switched(profile.preset_name)
-
-            return True
-
-        except Exception as e:
-            log(f"Error switching preset: {e}", "ERROR")
-            return False
-
-    # ========================================================================
-    # CREATE OPERATIONS
-    # ========================================================================
-
     def create_preset(self, name: str, from_current: bool = True) -> Optional[Preset]:
         """
         Creates a new preset.
@@ -454,47 +280,6 @@ class PresetManager:
         except Exception as e:
             log(f"Error creating preset: {e}", "ERROR")
             return None
-
-    def create_default_preset(self, name: str = "Default") -> Optional[Preset]:
-        """
-        Creates a default preset by copying from the built-in template.
-
-        Args:
-            name: Preset name
-
-        Returns:
-            Created Preset or None
-        """
-        if self.preset_exists(name):
-            log(f"Cannot create: preset '{name}' already exists", "WARNING")
-            return None
-
-        try:
-            self._get_facade().create(name, from_current=False)
-            self._notify_list_changed()
-            log(f"Created preset '{name}' from default template", "INFO")
-            return self.load_preset(name)
-        except Exception as e:
-            log(f"Error creating default preset: {e}", "ERROR")
-            return None
-
-    def create_preset_from_current(self, name: str) -> Optional[Preset]:
-        """
-        Creates a new preset from current configuration.
-
-        Shorthand for create_preset(name, from_current=True).
-
-        Args:
-            name: Name for new preset
-
-        Returns:
-            Created Preset or None
-        """
-        return self.create_preset(name, from_current=True)
-
-    # ========================================================================
-    # DELETE/RENAME OPERATIONS
-    # ========================================================================
 
     def delete_preset(self, name: str) -> bool:
         """
@@ -610,38 +395,6 @@ class PresetManager:
             log(f"Error importing preset '{src_path}' as '{name}': {e}", "ERROR")
             return False
 
-    # ========================================================================
-    # UTILITY METHODS
-    # ========================================================================
-
-    def ensure_presets_dir(self) -> Path:
-        """
-        Ensures presets directory exists.
-
-        Returns:
-            Path to presets directory
-        """
-        return get_presets_dir()
-
-    def get_active_preset_path(self) -> Path:
-        """
-        Gets path to the generated launch config.
-
-        Returns:
-            Path to the generated launch config for Zapret 2
-        """
-        return get_active_preset_path()
-
-    def load_current_from_registry(self) -> Optional[Preset]:
-        """
-        Legacy method for compatibility.
-        Now just returns the selected source preset.
-
-        Returns:
-            Active Preset
-        """
-        return self.get_active_preset()
-
     def sync_preset_to_active_file(self, preset: Preset, changed_category: str = None) -> bool:
         """
         Regenerates the generated launch config from a source preset.
@@ -661,205 +414,6 @@ class PresetManager:
             True if successful
         """
         return self._get_sync_layer().sync_preset(preset, changed_category=changed_category)
-
-    def _update_wf_out_ports_in_base_args(self, preset: Preset) -> str:
-        """
-        Updates `--wf-tcp-out` / `--wf-udp-out` in base_args based on enabled category filters.
-
-        Behavior:
-        - Treats existing `--wf-*-out=` as a base (user-controlled) port list.
-        - Adds/removes extra ports required by enabled category `--filter-tcp/--filter-udp`.
-        - Prevents stale ports from accumulating when categories are disabled.
-
-        Implementation detail:
-        - Remembers the previously auto-added "extra" ports in base_args via a comment line:
-          `# AutoWFOutExtra: tcp=... udp=...`
-          On the next sync we subtract that extra from the current `--wf-*-out` to recover base ports.
-
-        Normalization:
-        - sort ascending
-        - merge ranges
-        - remove duplicates (including singles covered by ranges)
-        """
-        from .base_filter import build_category_base_filter_lines
-
-        base_args = preset.base_args or ""
-        lines = base_args.splitlines()
-
-        marker_prefix = "# AutoWFOutExtra:"
-        marker_prefix_l = marker_prefix.lower()
-
-        existing_wf_tcp = ""
-        existing_wf_udp = ""
-        prev_extra_tcp = ""
-        prev_extra_udp = ""
-        marker_present = False
-        keep_empty_marker = False
-        for raw in lines:
-            stripped = raw.strip()
-            if stripped.startswith("--wf-tcp-out="):
-                existing_wf_tcp = stripped.split("=", 1)[1].strip()
-            elif stripped.startswith("--wf-udp-out="):
-                existing_wf_udp = stripped.split("=", 1)[1].strip()
-            elif stripped.lower().startswith(marker_prefix_l):
-                marker_present = True
-                payload = stripped.split(":", 1)[1].strip() if ":" in stripped else ""
-                for token in payload.split():
-                    k, _, v = token.partition("=")
-                    k_l = k.strip().lower()
-                    if k_l == "tcp":
-                        prev_extra_tcp = v.strip()
-                    elif k_l == "udp":
-                        prev_extra_udp = v.strip()
-
-        # One-time cleanup for the built-in "Default" preset:
-        # before this fix we used to permanently merge category ports into `--wf-*-out`,
-        # so disabling a category could leave stale ports behind.
-        # Here we reset the base wf ports to the template values (if available).
-        if not marker_present and (preset.name or "").strip().lower() == "default":
-            from .preset_defaults import get_builtin_preset_content
-            try:
-                template_tcp = ""
-                template_udp = ""
-                template = get_builtin_preset_content("Default") or ""
-                for raw in template.splitlines():
-                    line = raw.strip()
-                    if line.startswith("--wf-tcp-out="):
-                        template_tcp = line.split("=", 1)[1].strip()
-                        if template_udp:
-                            break
-                    elif line.startswith("--wf-udp-out="):
-                        template_udp = line.split("=", 1)[1].strip()
-                        if template_tcp:
-                            break
-
-                if template_tcp:
-                    existing_wf_tcp = template_tcp
-                if template_udp:
-                    existing_wf_udp = template_udp
-
-                # Keep an empty marker line to avoid re-running this migration on every save/sync.
-                if template_tcp or template_udp:
-                    keep_empty_marker = True
-            except Exception:
-                pass
-
-        # Recover base ports by subtracting the previously auto-added extra.
-        base_wf_tcp = subtract_port_specs(existing_wf_tcp, prev_extra_tcp) if prev_extra_tcp else (existing_wf_tcp or "")
-        base_wf_udp = subtract_port_specs(existing_wf_udp, prev_extra_udp) if prev_extra_udp else (existing_wf_udp or "")
-
-        if base_wf_tcp:
-            base_wf_tcp = union_port_specs([base_wf_tcp])
-        if base_wf_udp:
-            base_wf_udp = union_port_specs([base_wf_udp])
-
-        tcp_specs: list[str] = []
-        udp_specs: list[str] = []
-
-        for cat_name, cat in preset.categories.items():
-            if cat.tcp_enabled and cat.has_tcp():
-                base_filter_lines = build_category_base_filter_lines(cat_name, cat.filter_mode)
-                spec = ""
-                for token in base_filter_lines:
-                    token_s = token.strip()
-                    if token_s.startswith("--filter-tcp="):
-                        spec = token_s.split("=", 1)[1].strip()
-                        break
-                if not spec:
-                    spec = (cat.tcp_port or "").strip()
-                if spec:
-                    tcp_specs.append(spec)
-
-            if cat.udp_enabled and cat.has_udp():
-                base_filter_lines = build_category_base_filter_lines(cat_name, cat.filter_mode)
-                spec = ""
-                for token in base_filter_lines:
-                    token_s = token.strip()
-                    if token_s.startswith("--filter-udp="):
-                        spec = token_s.split("=", 1)[1].strip()
-                        break
-                if not spec:
-                    spec = (cat.udp_port or "").strip()
-                if spec:
-                    udp_specs.append(spec)
-
-        cats_wf_tcp = union_port_specs(tcp_specs) if tcp_specs else ""
-        cats_wf_udp = union_port_specs(udp_specs) if udp_specs else ""
-
-        new_extra_tcp = subtract_port_specs(cats_wf_tcp, base_wf_tcp) if cats_wf_tcp else ""
-        new_extra_udp = subtract_port_specs(cats_wf_udp, base_wf_udp) if cats_wf_udp else ""
-
-        new_wf_tcp = union_port_specs([base_wf_tcp, new_extra_tcp]) if (base_wf_tcp or new_extra_tcp) else ""
-        new_wf_udp = union_port_specs([base_wf_udp, new_extra_udp]) if (base_wf_udp or new_extra_udp) else ""
-
-        def _replace_or_add(prefix: str, value: str) -> None:
-            nonlocal lines
-            if not value:
-                return
-            replaced = False
-            out: list[str] = []
-            for raw in lines:
-                if raw.strip().startswith(prefix):
-                    out.append(f"{prefix}{value}")
-                    replaced = True
-                else:
-                    out.append(raw)
-            if not replaced:
-                # Insert after last lua-init line, otherwise near the top.
-                insert_at = 0
-                for i, raw in enumerate(out):
-                    if raw.strip().startswith("--lua-init="):
-                        insert_at = i + 1
-                out.insert(insert_at, f"{prefix}{value}")
-            lines = out
-
-        def _set_marker(extra_tcp: str, extra_udp: str, keep_empty: bool = False) -> None:
-            nonlocal lines
-            parts: list[str] = []
-            if extra_tcp:
-                parts.append(f"tcp={extra_tcp}")
-            if extra_udp:
-                parts.append(f"udp={extra_udp}")
-            if parts:
-                marker_line = f"{marker_prefix} {' '.join(parts)}".rstrip()
-            elif keep_empty:
-                marker_line = marker_prefix
-            else:
-                marker_line = ""
-
-            out: list[str] = []
-            replaced = False
-            for raw in lines:
-                if raw.strip().lower().startswith(marker_prefix_l):
-                    replaced = True
-                    if marker_line:
-                        out.append(marker_line)
-                else:
-                    out.append(raw)
-
-            if not replaced and marker_line:
-                # Insert after wf lines if present, otherwise after lua-init.
-                insert_at = 0
-                for i, raw in enumerate(out):
-                    s = raw.strip()
-                    if s.startswith("--wf-"):
-                        insert_at = i + 1
-                    elif s.startswith("--lua-init=") and insert_at == 0:
-                        insert_at = i + 1
-                out.insert(insert_at, marker_line)
-
-            lines = out
-
-        if new_wf_tcp:
-            _replace_or_add("--wf-tcp-out=", new_wf_tcp)
-        if new_wf_udp:
-            _replace_or_add("--wf-udp-out=", new_wf_udp)
-
-        # Keep marker only if it is needed to remove extra ports later.
-        keep_empty_final = marker_present or keep_empty_marker
-        _set_marker(new_extra_tcp, new_extra_udp, keep_empty=keep_empty_final)
-
-        return "\n".join(lines).strip()
 
     # ========================================================================
     # CATEGORY SETTINGS OPERATIONS
@@ -921,13 +475,18 @@ class PresetManager:
         if category_key not in preset.categories:
             preset.categories[category_key] = self._create_category_with_defaults(category_key)
 
+        try:
+            syndata_value = SyndataSettings.from_dict(syndata.to_dict())
+        except Exception:
+            syndata_value = syndata
+
         protocol_key = self._normalize_syndata_protocol(protocol)
         if protocol_key == "udp":
-            syndata.enabled = False
-            syndata.send_enabled = False
-            preset.categories[category_key].syndata_udp = syndata
+            syndata_value.enabled = False
+            syndata_value.send_enabled = False
+            preset.categories[category_key].syndata_udp = syndata_value
         else:
-            preset.categories[category_key].syndata_tcp = syndata
+            preset.categories[category_key].syndata_tcp = syndata_value
         preset.touch()
 
         if save_and_sync:
@@ -1375,8 +934,20 @@ class PresetManager:
             if not active_name:
                 active_name = name_by_key.get("default", "") or names[0]
 
-            if active_name and not self.switch_preset(active_name, reload_dpi=False):
-                log(f"Bulk reset: failed to re-apply selected preset '{active_name}'", "WARNING")
+            if active_name:
+                try:
+                    from core.services import get_direct_flow_coordinator
+
+                    profile = get_direct_flow_coordinator().select_preset("direct_zapret2", active_name)
+                    self._invalidate_active_preset_cache()
+                    self._get_store().notify_preset_switched(profile.preset_name)
+                    if self.on_preset_switched:
+                        try:
+                            self.on_preset_switched(profile.preset_name)
+                        except Exception:
+                            pass
+                except Exception as e:
+                    log(f"Bulk reset: failed to re-apply selected preset '{active_name}': {e}", "WARNING")
 
             return (success_count, total_count, failed)
         except Exception as e:
@@ -1560,7 +1131,9 @@ class PresetManager:
             True if successful
         """
         # Normalize/update wf-*-out before persisting anywhere.
-        preset.base_args = self._update_wf_out_ports_in_base_args(preset)
+        from .sync_layer import update_wf_out_ports_in_base_args
+
+        preset.base_args = update_wf_out_ports_in_base_args(preset)
 
         # Save to presets folder if it has a name.
         if preset.name and preset.name != "Current":
@@ -1737,22 +1310,16 @@ class PresetManager:
                     
                     # Update out-range for UDP
                     out_range = extract_out_range_from_args(args)
-                    if out_range.get("enabled"):
-                        cat.syndata_udp.out_range_enabled = True
-                        cat.syndata_udp.out_range_arg = out_range.get("arg", "")
-                    else:
-                        cat.syndata_udp.out_range_enabled = False
+                    cat.syndata_udp.out_range = int(out_range.get("out_range", 0) or 0)
+                    cat.syndata_udp.out_range_mode = str(out_range.get("out_range_mode") or "n")
                 else:
                     cat.tcp_args = pure_strategy_args
                     cat.udp_args = ""
                     
                     # Update syndata/send/out-range for TCP
                     out_range = extract_out_range_from_args(args)
-                    if out_range.get("enabled"):
-                        cat.syndata_tcp.out_range_enabled = True
-                        cat.syndata_tcp.out_range_arg = out_range.get("arg", "")
-                    else:
-                        cat.syndata_tcp.out_range_enabled = False
+                    cat.syndata_tcp.out_range = int(out_range.get("out_range", 0) or 0)
+                    cat.syndata_tcp.out_range_mode = str(out_range.get("out_range_mode") or "n")
                         
                     syndata = extract_syndata_from_args(args)
                     if syndata.get("enabled"):
@@ -1769,7 +1336,7 @@ class PresetManager:
                     send = extract_send_from_args(args)
                     if send.get("send_enabled"):
                         cat.syndata_tcp.send_enabled = True
-                        cat.syndata_tcp.send_repeats = send.get("send_repeats", 1)
+                        cat.syndata_tcp.send_repeats = send.get("send_repeats", 2)
                         cat.syndata_tcp.send_ip_ttl = send.get("send_ip_ttl", 0)
                         cat.syndata_tcp.send_ip6_ttl = send.get("send_ip6_ttl", 0)
                         cat.syndata_tcp.send_ip_id = send.get("send_ip_id", "")
@@ -1789,8 +1356,10 @@ class PresetManager:
                 # so get_full_tcp_args doesn't append default values on top of the raw args.
                 cat.syndata_tcp.enabled = False
                 cat.syndata_tcp.send_enabled = False
-                cat.syndata_tcp.out_range_enabled = False
-                cat.syndata_udp.out_range_enabled = False
+                cat.syndata_tcp.out_range = 0
+                cat.syndata_tcp.out_range_mode = "n"
+                cat.syndata_udp.out_range = 0
+                cat.syndata_udp.out_range_mode = "n"
 
     def set_strategy_selections(
         self,

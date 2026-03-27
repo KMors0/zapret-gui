@@ -104,6 +104,153 @@ def _drop_active_preset_headers(source_text: str) -> str:
     return "\n".join(lines).rstrip("\n") + "\n"
 
 
+def _apply_zapret2_strategy_args(preset, category_key: str, strategy_id: str) -> None:
+    from preset_zapret2.catalog import load_categories, load_strategies
+    from preset_zapret2.txt_preset_parser import (
+        extract_out_range_from_args,
+        extract_send_from_args,
+        extract_strategy_args,
+        extract_syndata_from_args,
+    )
+
+    category = (preset.categories or {}).get(category_key)
+    if not category:
+        return
+
+    if strategy_id == "none":
+        category.tcp_args = ""
+        category.udp_args = ""
+        return
+
+    categories = load_categories()
+    category_info = categories.get(category_key) or {}
+    strategy_type = (category_info.get("strategy_type") or "tcp").strip() or "tcp"
+
+    try:
+        from strategy_menu.strategies_registry import get_current_strategy_set
+
+        strategy_set = get_current_strategy_set()
+    except Exception:
+        strategy_set = None
+
+    strategies = load_strategies(strategy_type, strategy_set=strategy_set)
+    args = (strategies.get(strategy_id) or {}).get("args", "") or ""
+
+    if not args and strategy_type == "tcp":
+        try:
+            fake_strategy_set = "advanced" if strategy_set == "advanced" else None
+            fake_strategies = load_strategies("tcp_fake", strategy_set=fake_strategy_set)
+            args = (fake_strategies.get(strategy_id) or {}).get("args", "") or ""
+        except Exception:
+            args = args or ""
+
+    if not args:
+        return
+
+    protocol = (category_info.get("protocol") or "").upper()
+    is_udp = any(token in protocol for token in ("UDP", "QUIC", "L7", "RAW"))
+
+    if strategy_set == "advanced":
+        pure_strategy_args = extract_strategy_args(args, category_key=category_key)
+
+        if is_udp:
+            category.udp_args = pure_strategy_args
+            category.tcp_args = ""
+
+            out_range = extract_out_range_from_args(args)
+            category.syndata_udp.out_range = int(out_range.get("out_range", 0) or 0)
+            category.syndata_udp.out_range_mode = str(out_range.get("out_range_mode") or "n")
+            return
+
+        category.tcp_args = pure_strategy_args
+        category.udp_args = ""
+
+        out_range = extract_out_range_from_args(args)
+        category.syndata_tcp.out_range = int(out_range.get("out_range", 0) or 0)
+        category.syndata_tcp.out_range_mode = str(out_range.get("out_range_mode") or "n")
+
+        syndata = extract_syndata_from_args(args)
+        if syndata.get("enabled"):
+            category.syndata_tcp.enabled = True
+            category.syndata_tcp.blob = syndata.get("blob", "none")
+            category.syndata_tcp.tls_mod = syndata.get("tls_mod", "none")
+            category.syndata_tcp.autottl_delta = syndata.get("autottl_delta", 0)
+            category.syndata_tcp.autottl_min = syndata.get("autottl_min", 3)
+            category.syndata_tcp.autottl_max = syndata.get("autottl_max", 20)
+            category.syndata_tcp.tcp_flags_unset = syndata.get("tcp_flags_unset", "none")
+        else:
+            category.syndata_tcp.enabled = False
+
+        send = extract_send_from_args(args)
+        if send.get("send_enabled"):
+            category.syndata_tcp.send_enabled = True
+            category.syndata_tcp.send_repeats = send.get("send_repeats", 2)
+            category.syndata_tcp.send_ip_ttl = send.get("send_ip_ttl", 0)
+            category.syndata_tcp.send_ip6_ttl = send.get("send_ip6_ttl", 0)
+            category.syndata_tcp.send_ip_id = send.get("send_ip_id", "")
+            category.syndata_tcp.send_badsum = send.get("send_badsum", False)
+        else:
+            category.syndata_tcp.send_enabled = False
+        return
+
+    if is_udp:
+        category.udp_args = args
+        category.tcp_args = ""
+    else:
+        category.tcp_args = args
+        category.udp_args = ""
+
+    category.syndata_tcp.enabled = False
+    category.syndata_tcp.send_enabled = False
+    category.syndata_tcp.out_range = 0
+    category.syndata_tcp.out_range_mode = "n"
+    category.syndata_udp.out_range = 0
+    category.syndata_udp.out_range_mode = "n"
+
+
+def _selection_id_from_zapret1_category(category) -> str:
+    strategy_id = str(getattr(category, "strategy_id", "") or "").strip().lower() or "none"
+    if strategy_id == "none":
+        has_args = bool(
+            (getattr(category, "tcp_args", "") or "").strip()
+            or (getattr(category, "udp_args", "") or "").strip()
+        )
+        if has_args:
+            return "custom"
+    return strategy_id
+
+
+def _apply_zapret1_strategy_args(preset, category_key: str, strategy_id: str) -> None:
+    from preset_zapret1.strategies_loader import load_v1_strategies
+    from preset_zapret2.catalog import load_categories
+
+    category = (preset.categories or {}).get(category_key)
+    if not category:
+        return
+
+    if strategy_id == "none":
+        category.tcp_args = ""
+        category.udp_args = ""
+        return
+
+    categories = load_categories()
+    category_info = categories.get(category_key) or {}
+    strategies = load_v1_strategies(category_key)
+    args = (strategies.get(strategy_id) or {}).get("args", "") or ""
+
+    if not args:
+        return
+
+    protocol = (category_info.get("protocol") or "").upper()
+    is_udp = any(token in protocol for token in ("UDP", "QUIC", "L7", "RAW"))
+    if is_udp:
+        category.udp_args = args
+        category.tcp_args = ""
+    else:
+        category.tcp_args = args
+        category.udp_args = ""
+
+
 def _resolve_reset_template(launch_method: str, preset_name: str) -> str:
     if launch_method == "direct_zapret2":
         from preset_zapret2.preset_defaults import (
@@ -160,15 +307,19 @@ class DirectPresetFacade:
             return cls(engine="winws1", launch_method=method, on_dpi_reload_needed=on_dpi_reload_needed)
         raise ValueError(f"Unsupported launch method for direct preset facade: {launch_method}")
 
-    def _get_manager(self):
+    def _load_selected_preset_model(self):
+        selected_name = (self.get_selected_name() or "").strip()
+        if not selected_name:
+            return None
+
         if self.launch_method == "direct_zapret2":
-            from preset_zapret2 import PresetManager
+            from preset_zapret2 import load_preset
 
-            return PresetManager(on_dpi_reload_needed=self.on_dpi_reload_needed)
+            return load_preset(selected_name)
 
-        from preset_zapret1 import PresetManagerV1
+        from preset_zapret1 import load_preset_v1
 
-        return PresetManagerV1(on_dpi_reload_needed=self.on_dpi_reload_needed)
+        return load_preset_v1(selected_name)
 
     def list_presets(self) -> list[PresetDocument]:
         return get_preset_repository().list_presets(self.engine)
@@ -361,48 +512,430 @@ class DirectPresetFacade:
         get_preset_repository().delete_preset(self.engine, document.manifest.id)
 
     def get_strategy_selections(self) -> dict:
-        return self._get_manager().get_strategy_selections() or {}
+        if self.launch_method == "direct_zapret2":
+            preset = self.get_active_preset()
+            if not preset:
+                return {}
+            return {
+                str(cat_key or "").strip().lower(): (getattr(cat_config, "strategy_id", "") or "none")
+                for cat_key, cat_config in (preset.categories or {}).items()
+                if str(cat_key or "").strip()
+            }
+        if self.launch_method == "direct_zapret1":
+            preset = self.get_active_preset()
+            if not preset:
+                return {}
+
+            raw = {}
+            for cat_key, cat_config in (preset.categories or {}).items():
+                normalized_key = str(cat_key or "").strip().lower()
+                if not normalized_key:
+                    continue
+                raw[normalized_key] = _selection_id_from_zapret1_category(cat_config)
+
+            try:
+                from preset_zapret1.sync_layer import Zapret1PresetSyncLayer
+
+                present_from_lists = Zapret1PresetSyncLayer().infer_active_categories_from_launch_config()
+                for key in present_from_lists:
+                    if raw.get(key, "none") == "none":
+                        raw[key] = "custom"
+            except Exception:
+                pass
+            return raw
+        raise ValueError(f"Unsupported launch method for strategy selections: {self.launch_method}")
+
+    def set_strategy_selections(self, selections: dict, *, save_and_sync: bool = True) -> bool:
+        if self.launch_method == "direct_zapret2":
+            preset = self.get_active_preset()
+            if not preset:
+                return False
+
+            for category_key, strategy_id in (selections or {}).items():
+                normalized_key = str(category_key or "").strip().lower()
+                if not normalized_key:
+                    continue
+                category = self.ensure_category(preset, normalized_key)
+                if category is None:
+                    continue
+                category.strategy_id = strategy_id
+                _apply_zapret2_strategy_args(preset, normalized_key, strategy_id)
+
+            preset.touch()
+            return self.save_preset_model(preset) if save_and_sync else True
+        if self.launch_method == "direct_zapret1":
+            preset = self.get_active_preset()
+            if not preset:
+                return False
+
+            for category_key, strategy_id in (selections or {}).items():
+                normalized_key = str(category_key or "").strip().lower()
+                if not normalized_key:
+                    continue
+                category = self.ensure_category(preset, normalized_key)
+                if category is None:
+                    continue
+                category.strategy_id = strategy_id
+                _apply_zapret1_strategy_args(preset, normalized_key, strategy_id)
+
+            preset.touch()
+            return self.save_preset_model(preset) if save_and_sync else True
+        raise ValueError(f"Unsupported launch method for strategy selections: {self.launch_method}")
 
     def set_strategy_selection(self, category_key: str, strategy_id: str, *, save_and_sync: bool = True) -> bool:
-        return bool(self._get_manager().set_strategy_selection(category_key, strategy_id, save_and_sync=save_and_sync))
+        if self.launch_method == "direct_zapret2":
+            normalized_key = str(category_key or "").strip().lower()
+            if not normalized_key:
+                return False
+            preset = self.get_active_preset()
+            if not preset:
+                return False
+            category = self.ensure_category(preset, normalized_key)
+            if category is None:
+                return False
+            category.strategy_id = strategy_id
+            _apply_zapret2_strategy_args(preset, normalized_key, strategy_id)
+            preset.touch()
+            return self.save_preset_model(preset, changed_category=normalized_key) if save_and_sync else True
+        if self.launch_method == "direct_zapret1":
+            normalized_key = str(category_key or "").strip().lower()
+            if not normalized_key:
+                return False
+            preset = self.get_active_preset()
+            if not preset:
+                return False
+            category = self.ensure_category(preset, normalized_key)
+            if category is None:
+                return False
+            category.strategy_id = strategy_id
+            _apply_zapret1_strategy_args(preset, normalized_key, strategy_id)
+            preset.touch()
+            return self.save_category_preserving_layout(preset, normalized_key) if save_and_sync else True
+        raise ValueError(f"Unsupported launch method for strategy selection: {self.launch_method}")
 
     def get_active_preset(self):
-        return self._get_manager().get_active_preset()
+        return self._load_selected_preset_model()
 
     def get_category_filter_mode(self, category_key: str) -> str:
-        return self._get_manager().get_category_filter_mode(category_key)
+        preset = self.get_active_preset()
+        if not preset:
+            return "hostlist"
+        category = (preset.categories or {}).get(category_key)
+        if not category:
+            return "hostlist"
+
+        mode = str(getattr(category, "filter_mode", "") or "").strip().lower()
+        if mode in ("hostlist", "ipset"):
+            return mode
+        return "hostlist"
 
     def update_category_filter_mode(self, category_key: str, filter_mode: str, *, save_and_sync: bool = True) -> bool:
-        return bool(self._get_manager().update_category_filter_mode(category_key, filter_mode, save_and_sync=save_and_sync))
+        if self.launch_method == "direct_zapret2":
+            mode = str(filter_mode or "").strip().lower()
+            if mode not in ("hostlist", "ipset"):
+                return False
+            preset = self.get_active_preset()
+            if not preset:
+                return False
+            category = self.ensure_category(preset, category_key)
+            if category is None:
+                return False
+            category.filter_mode = mode
+            preset.touch()
+            return self.save_preset_model(preset) if save_and_sync else True
+        if self.launch_method == "direct_zapret1":
+            normalized_key = str(category_key or "").strip().lower()
+            mode = str(filter_mode or "").strip().lower()
+            if mode not in ("hostlist", "ipset"):
+                return False
+            preset = self.get_active_preset()
+            if not preset:
+                return False
+            category = self.ensure_category(preset, normalized_key)
+            if category is None:
+                return False
+            category.filter_mode = mode
+            preset.touch()
+            return self.save_category_preserving_layout(preset, normalized_key) if save_and_sync else True
+        raise ValueError(f"Unsupported launch method for category filter mode update: {self.launch_method}")
 
     def reset_category_settings(self, category_key: str) -> bool:
-        return bool(self._get_manager().reset_category_settings(category_key))
+        if self.launch_method == "direct_zapret2":
+            from preset_zapret2.preset_defaults import (
+                get_builtin_base_from_copy_name,
+                get_category_default_filter_mode,
+                get_category_default_syndata,
+                get_default_category_settings,
+                get_default_template_content,
+                get_template_content,
+                invalidate_templates_cache,
+            )
+            from preset_zapret2.preset_model import SyndataSettings
+            from preset_zapret2.strategy_inference import infer_strategy_id_from_args
+            from preset_zapret2.txt_preset_parser import parse_preset_content
+
+            preset = self.get_active_preset()
+            if not preset:
+                return False
+
+            normalized_key = str(category_key or "").strip().lower()
+            category = self.ensure_category(preset, normalized_key)
+            if category is None:
+                return False
+
+            try:
+                from strategy_menu.strategies_registry import get_current_strategy_set
+
+                current_strategy_set = get_current_strategy_set()
+            except Exception:
+                current_strategy_set = None
+
+            default_filter_mode = get_category_default_filter_mode(normalized_key)
+            default_settings = get_default_category_settings().get(normalized_key) or {}
+
+            active_preset_name = (self.get_selected_name() or getattr(preset, "name", "") or "").strip()
+            try:
+                try:
+                    invalidate_templates_cache()
+                except Exception:
+                    pass
+
+                template_content = ""
+                if active_preset_name:
+                    template_content = get_template_content(active_preset_name) or ""
+                    if not template_content:
+                        base_name = get_builtin_base_from_copy_name(active_preset_name)
+                        if base_name:
+                            template_content = get_template_content(base_name) or ""
+                if not template_content:
+                    template_content = get_default_template_content() or ""
+
+                if template_content:
+                    template_data = parse_preset_content(template_content)
+                    template_category_settings: dict = {}
+
+                    for block in template_data.categories:
+                        block_cat = str(getattr(block, "category", "") or "").strip().lower()
+                        if not block_cat or block_cat != normalized_key:
+                            continue
+
+                        if not template_category_settings:
+                            template_category_settings = {
+                                "filter_mode": str(getattr(block, "filter_mode", "") or "").strip().lower() or "hostlist",
+                                "tcp_enabled": False,
+                                "tcp_port": "",
+                                "tcp_args": "",
+                                "udp_enabled": False,
+                                "udp_port": "",
+                                "udp_args": "",
+                                "syndata_overrides_tcp": {},
+                                "syndata_overrides_udp": {},
+                            }
+
+                        overrides = getattr(block, "syndata_dict", None) or {}
+                        if isinstance(overrides, dict) and overrides:
+                            target = "syndata_overrides_tcp" if block.protocol == "tcp" else "syndata_overrides_udp"
+                            template_category_settings[target].update(overrides)
+
+                        if block.protocol == "tcp":
+                            template_category_settings["tcp_enabled"] = True
+                            template_category_settings["tcp_port"] = str(block.port or "").strip()
+                            template_category_settings["tcp_args"] = str(block.strategy_args or "").strip()
+                            mode = str(block.filter_mode or "").strip().lower()
+                            if mode in ("hostlist", "ipset"):
+                                template_category_settings["filter_mode"] = mode
+                        elif block.protocol == "udp":
+                            template_category_settings["udp_enabled"] = True
+                            template_category_settings["udp_port"] = str(block.port or "").strip()
+                            template_category_settings["udp_args"] = str(block.strategy_args or "").strip()
+                            if not template_category_settings.get("tcp_enabled"):
+                                mode = str(block.filter_mode or "").strip().lower()
+                                if mode in ("hostlist", "ipset"):
+                                    template_category_settings["filter_mode"] = mode
+
+                    if template_category_settings:
+                        default_settings = template_category_settings
+                        mode = str(template_category_settings.get("filter_mode") or "").strip().lower()
+                        if mode in ("hostlist", "ipset"):
+                            default_filter_mode = mode
+            except Exception:
+                pass
+
+            if default_settings:
+                tcp_defaults = SyndataSettings.get_defaults().to_dict()
+                udp_defaults = SyndataSettings.get_defaults_udp().to_dict()
+
+                tcp_overrides = default_settings.get("syndata_overrides_tcp") or {}
+                udp_overrides = default_settings.get("syndata_overrides_udp") or {}
+                if isinstance(tcp_overrides, dict) and tcp_overrides:
+                    tcp_defaults.update(tcp_overrides)
+                if isinstance(udp_overrides, dict) and udp_overrides:
+                    udp_defaults.update(udp_overrides)
+            else:
+                tcp_defaults = get_category_default_syndata(normalized_key, protocol="tcp")
+                udp_defaults = get_category_default_syndata(normalized_key, protocol="udp")
+
+            category.syndata_tcp = SyndataSettings.from_dict(tcp_defaults)
+            category.syndata_udp = SyndataSettings.from_dict(udp_defaults)
+            category.filter_mode = default_filter_mode
+            category.sort_order = "default"
+
+            if default_settings:
+                category.tcp_enabled = bool(default_settings.get("tcp_enabled", False))
+                category.udp_enabled = bool(default_settings.get("udp_enabled", False))
+                category.tcp_port = str(default_settings.get("tcp_port") or category.tcp_port or "443")
+                category.udp_port = str(default_settings.get("udp_port") or category.udp_port or "443")
+                category.tcp_args = str(default_settings.get("tcp_args") or "").strip()
+                category.udp_args = str(default_settings.get("udp_args") or "").strip()
+
+                inferred = "none"
+                if category.tcp_args:
+                    inferred = infer_strategy_id_from_args(
+                        category_key=normalized_key,
+                        args=category.tcp_args,
+                        protocol="tcp",
+                        strategy_set=current_strategy_set,
+                    )
+                if inferred == "none" and category.udp_args:
+                    inferred = infer_strategy_id_from_args(
+                        category_key=normalized_key,
+                        args=category.udp_args,
+                        protocol="udp",
+                        strategy_set=current_strategy_set,
+                    )
+                category.strategy_id = inferred or "none"
+            else:
+                if category.strategy_id and category.strategy_id != "none":
+                    _apply_zapret2_strategy_args(preset, normalized_key, category.strategy_id)
+                else:
+                    category.tcp_args = ""
+                    category.udp_args = ""
+                    category.strategy_id = "none"
+
+            preset.touch()
+            return self.save_preset_model(preset)
+
+        raise NotImplementedError(
+            "direct_zapret1 does not expose a standalone reset_category_settings path in DirectPresetFacade."
+        )
 
     def get_category_syndata(self, category_key: str, *, protocol: str = "tcp"):
-        return self._get_manager().get_category_syndata(category_key, protocol=protocol)
+        if self.launch_method == "direct_zapret1":
+            raise NotImplementedError(
+                "direct_zapret1 does not expose a structured syndata API; "
+                "syndata-like flags live inside raw strategy args."
+            )
+
+        from preset_zapret2.preset_model import SyndataSettings
+
+        preset = self.get_active_preset()
+        if not preset:
+            return (
+                SyndataSettings.get_defaults()
+                if str(protocol or "").strip().lower() == "tcp"
+                else SyndataSettings.get_defaults_udp()
+            )
+
+        category = (preset.categories or {}).get(category_key)
+        if not category:
+            return (
+                SyndataSettings.get_defaults()
+                if str(protocol or "").strip().lower() == "tcp"
+                else SyndataSettings.get_defaults_udp()
+            )
+
+        protocol_key = str(protocol or "").strip().lower()
+        if protocol_key in ("udp", "quic", "l7", "raw"):
+            return category.syndata_udp
+        return category.syndata_tcp
 
     def update_category_syndata(self, category_key: str, syndata, *, protocol: str = "tcp", save_and_sync: bool = True) -> bool:
-        return bool(
-            self._get_manager().update_category_syndata(
-                category_key,
-                syndata,
-                protocol=protocol,
-                save_and_sync=save_and_sync,
-            )
+        if self.launch_method == "direct_zapret2":
+            from preset_zapret2.preset_model import SyndataSettings
+
+            preset = self.get_active_preset()
+            if not preset:
+                return False
+            category = self.ensure_category(preset, category_key)
+            if category is None:
+                return False
+            try:
+                syndata_value = SyndataSettings.from_dict(syndata.to_dict())
+            except Exception:
+                syndata_value = syndata
+            protocol_key = str(protocol or "").strip().lower()
+            if protocol_key in ("udp", "quic", "l7", "raw"):
+                try:
+                    syndata_value.enabled = False
+                    syndata_value.send_enabled = False
+                except Exception:
+                    pass
+                category.syndata_udp = syndata_value
+            else:
+                category.syndata_tcp = syndata_value
+            preset.touch()
+            return self.save_preset_model(preset) if save_and_sync else True
+        raise NotImplementedError(
+            "direct_zapret1 does not expose a structured syndata API; "
+            "syndata-like flags must be edited through raw strategy args."
         )
 
     def get_category_sort_order(self, category_key: str) -> str:
-        return self._get_manager().get_category_sort_order(category_key)
+        if self.launch_method == "direct_zapret1":
+            return "default"
+
+        preset = self.get_active_preset()
+        if not preset:
+            return "default"
+        category = (preset.categories or {}).get(category_key)
+        if not category:
+            return "default"
+
+        sort_order = str(getattr(category, "sort_order", "") or "").strip().lower()
+        if sort_order in ("default", "name_asc", "name_desc"):
+            return sort_order
+        return "default"
 
     def update_category_sort_order(self, category_key: str, sort_order: str, *, save_and_sync: bool = True) -> bool:
-        return bool(self._get_manager().update_category_sort_order(category_key, sort_order, save_and_sync=save_and_sync))
+        if self.launch_method == "direct_zapret1":
+            return False
+
+        if self.launch_method == "direct_zapret2":
+            value = str(sort_order or "").strip().lower()
+            if value not in ("default", "name_asc", "name_desc"):
+                return False
+            preset = self.get_active_preset()
+            if not preset:
+                return False
+            category = self.ensure_category(preset, category_key)
+            if category is None:
+                return False
+            category.sort_order = value
+            preset.touch()
+            if not save_and_sync:
+                return True
+            return self.save_preset_model(preset)
+        raise ValueError(f"Unsupported launch method for category sort order update: {self.launch_method}")
 
     def ensure_category(self, preset, category_key: str):
-        manager = self._get_manager()
         if self.launch_method == "direct_zapret2":
-            if category_key not in preset.categories:
-                preset.categories[category_key] = manager._create_category_with_defaults(category_key)
-            return preset.categories[category_key]
+            from preset_zapret2.preset_defaults import (
+                get_category_default_filter_mode,
+                get_category_default_syndata,
+            )
+            from preset_zapret2.preset_model import CategoryConfig, SyndataSettings
+
+            normalized_key = str(category_key or "").strip().lower()
+            if not normalized_key:
+                return None
+            if normalized_key not in preset.categories:
+                preset.categories[normalized_key] = CategoryConfig(
+                    name=normalized_key,
+                    syndata_tcp=SyndataSettings.from_dict(get_category_default_syndata(normalized_key, protocol="tcp")),
+                    syndata_udp=SyndataSettings.from_dict(get_category_default_syndata(normalized_key, protocol="udp")),
+                    filter_mode=get_category_default_filter_mode(normalized_key),
+                )
+            return preset.categories[normalized_key]
 
         from preset_zapret1.preset_model import CategoryConfigV1
 
@@ -411,13 +944,60 @@ class DirectPresetFacade:
         return preset.categories[category_key]
 
     def save_preset_model(self, preset, *, changed_category: str | None = None) -> bool:
-        manager = self._get_manager()
         if self.launch_method == "direct_zapret2":
-            return bool(manager._save_and_sync_preset(preset, changed_category=changed_category))
-        return bool(manager._save_and_sync_preset(preset))
+            from preset_zapret2.preset_storage import save_preset
+            from preset_zapret2.preset_store import get_preset_store
+            from preset_zapret2.sync_layer import sync_preset_to_runtime, update_wf_out_ports_in_base_args
+
+            preset.base_args = update_wf_out_ports_in_base_args(preset)
+            if preset.name and preset.name != "Current":
+                if not save_preset(preset):
+                    return False
+                try:
+                    get_preset_store().notify_preset_saved(preset.name)
+                except Exception:
+                    pass
+            return bool(
+                sync_preset_to_runtime(
+                    preset,
+                    changed_category=changed_category,
+                    on_dpi_reload_needed=self.on_dpi_reload_needed,
+                )
+            )
+        from preset_zapret1.preset_storage import save_preset_v1
+        from preset_zapret1.preset_store import get_preset_store_v1
+        from preset_zapret1.sync_layer import Zapret1PresetSyncLayer
+
+        if preset.name and preset.name != "Current":
+            if not save_preset_v1(preset):
+                return False
+            try:
+                get_preset_store_v1().notify_preset_saved(preset.name)
+            except Exception:
+                pass
+
+        selected_name = (self.get_selected_name() or "").strip().lower()
+        preset_name = str(getattr(preset, "name", "") or "").strip().lower()
+        if preset_name and selected_name and preset_name == selected_name:
+            try:
+                get_direct_flow_coordinator().refresh_selected_runtime("direct_zapret1")
+                return True
+            except Exception:
+                return False
+
+        layer = Zapret1PresetSyncLayer(
+            on_dpi_reload_needed=self.on_dpi_reload_needed,
+            get_selected_name=self.get_selected_name,
+        )
+        return bool(layer.sync_preset(preset))
 
     def save_category_preserving_layout(self, preset, category_key: str) -> bool:
-        manager = self._get_manager()
         if self.launch_method == "direct_zapret2":
-            return bool(manager._save_and_sync_preset(preset, changed_category=category_key))
-        return bool(manager._save_and_sync_category(preset, category_key))
+            return self.save_preset_model(preset, changed_category=category_key)
+        from preset_zapret1.sync_layer import Zapret1PresetSyncLayer
+
+        layer = Zapret1PresetSyncLayer(
+            on_dpi_reload_needed=self.on_dpi_reload_needed,
+            get_selected_name=self.get_selected_name,
+        )
+        return bool(layer.sync_category_preserving_layout(preset, category_key))

@@ -3,8 +3,6 @@
 
 from __future__ import annotations
 
-import os
-from pathlib import Path
 from typing import Dict, List, Optional
 
 from PyQt6.QtCore import QObject, pyqtSignal
@@ -30,7 +28,6 @@ class PresetStoreV1(QObject):
     def __init__(self, parent: Optional[QObject] = None):
         super().__init__(parent)
         self._presets: Dict[str, "PresetV1"] = {}
-        self._preset_mtimes: Dict[str, float] = {}
         self._loaded = False
         self._active_name: Optional[str] = None
 
@@ -84,21 +81,14 @@ class PresetStoreV1(QObject):
             self._do_full_load()
 
     def _do_full_load(self) -> None:
-        from .preset_storage import list_presets_v1, load_preset_v1, get_preset_path_v1
+        from .preset_storage import list_presets_v1, load_preset_v1
         self._presets.clear()
-        self._preset_mtimes.clear()
         names = list_presets_v1()
         for name in names:
             try:
                 preset = load_preset_v1(name)
                 if preset is not None:
                     self._presets[name] = preset
-                    try:
-                        path = get_preset_path_v1(name)
-                        if path.exists():
-                            self._preset_mtimes[name] = os.path.getmtime(str(path))
-                    except Exception:
-                        pass
             except Exception as e:
                 log(f"PresetStoreV1: error loading preset '{name}': {e}", "DEBUG")
         try:
@@ -111,20 +101,13 @@ class PresetStoreV1(QObject):
         log(f"PresetStoreV1: loaded {len(self._presets)} presets", "DEBUG")
 
     def _reload_single_preset(self, name: str) -> None:
-        from .preset_storage import load_preset_v1, get_preset_path_v1
+        from .preset_storage import load_preset_v1
         try:
             preset = load_preset_v1(name)
             if preset is not None:
                 self._presets[name] = preset
-                try:
-                    path = get_preset_path_v1(name)
-                    if path.exists():
-                        self._preset_mtimes[name] = os.path.getmtime(str(path))
-                except Exception:
-                    pass
             else:
                 self._presets.pop(name, None)
-                self._preset_mtimes.pop(name, None)
         except Exception as e:
             log(f"PresetStoreV1: error reloading preset '{name}': {e}", "DEBUG")
 

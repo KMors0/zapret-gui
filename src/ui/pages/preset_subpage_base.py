@@ -372,10 +372,10 @@ class PresetSubpageBase(BasePage):
         try:
             counter = 1
             new_name = f"{self._preset_name} (копия)"
-            while self._get_manager_obj().preset_exists(new_name):
+            facade = self._get_direct_facade()
+            while (facade.exists(new_name) if facade is not None else self._get_manager_obj().preset_exists(new_name)):
                 counter += 1
                 new_name = f"{self._preset_name} (копия {counter})"
-            facade = self._get_direct_facade()
             if facade is not None:
                 facade.duplicate(self._preset_name, new_name)
                 self._notify_presets_changed()
@@ -478,7 +478,7 @@ class PresetSubpageBase(BasePage):
 
                 return (get_direct_flow_coordinator().get_selected_preset_name(method) or "").strip()
             except Exception:
-                pass
+                return ""
         return (self._get_manager_obj().get_active_preset_name() or "").strip()
 
     def _refresh_selected_runtime(self) -> bool:
@@ -491,7 +491,10 @@ class PresetSubpageBase(BasePage):
                 return True
             except Exception:
                 return False
-        return bool(self._get_manager_obj().switch_preset(self._preset_name, reload_dpi=False))
+        switch_preset = getattr(self._get_manager_obj(), "switch_preset", None)
+        if not callable(switch_preset):
+            return False
+        return bool(switch_preset(self._preset_name, reload_dpi=False))
 
     def _activate_selected_preset(self) -> bool:
         method = self._direct_launch_method()
@@ -504,7 +507,10 @@ class PresetSubpageBase(BasePage):
                 return True
             except Exception:
                 return False
-        return bool(self._get_manager_obj().switch_preset(self._preset_name, reload_dpi=False))
+        switch_preset = getattr(self._get_manager_obj(), "switch_preset", None)
+        if not callable(switch_preset):
+            return False
+        return bool(switch_preset(self._preset_name, reload_dpi=False))
 
     def _notify_preset_switched(self) -> None:
         method = self._direct_launch_method()

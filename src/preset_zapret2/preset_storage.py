@@ -40,12 +40,6 @@ def _core_paths():
     return get_app_paths().engine_paths(_core_engine_id()).ensure_directories()
 
 
-def _core_selection_service():
-    from core.services import get_selection_service
-
-    return get_selection_service()
-
-
 def _get_app_core_path() -> str:
     """Lazily gets the app core path (APP_CORE_PATH) to avoid import cycles."""
     global _APP_CORE_PATH
@@ -270,24 +264,31 @@ def load_preset(name: str) -> Optional[Preset]:
 
             cat = preset.categories[cat_name]
 
-            # Restore per-protocol advanced settings from syndata_dict (if available).
-            if hasattr(block, 'syndata_dict') and block.syndata_dict:
-                if block.protocol == "tcp":
-                    base = cat.syndata_tcp.to_dict()
-                    base.update(block.syndata_dict)
-                    cat.syndata_tcp = SyndataSettings.from_dict(base)
-                elif block.protocol == "udp":
-                    base = cat.syndata_udp.to_dict()
-                    base.update(block.syndata_dict)
-                    cat.syndata_udp = SyndataSettings.from_dict(base)
-            else:
-                # No syndata_dict = block had no --out-range/--lua-desync=send/syndata.
-                # Reset out_range to 0 so _get_out_range_args() returns "" (don't inject
-                # a default --out-range=-n8 into blocks that never had one).
-                if block.protocol == "tcp":
-                    cat.syndata_tcp.out_range = 0
-                elif block.protocol == "udp":
-                    cat.syndata_udp.out_range = 0
+            # Restore per-protocol advanced settings only when the parser extracted
+            # real structured state. Bare sentinels like {"enabled": False,
+            # "send_enabled": False} mean "keep this block raw-only".
+            syndata_dict = getattr(block, "syndata_dict", None)
+            has_structured_advanced_state = _has_meaningful_structured_advanced_state(syndata_dict)
+            if block.protocol == "tcp":
+                if has_structured_advanced_state:
+                    base = SyndataSettings.get_defaults().to_dict()
+                    base.update(syndata_dict)
+                else:
+                    base = SyndataSettings.get_defaults().to_dict()
+                    base["enabled"] = False
+                    base["send_enabled"] = False
+                    base["out_range"] = 0
+                    base["out_range_mode"] = "n"
+                cat.syndata_tcp = SyndataSettings.from_dict(base)
+            elif block.protocol == "udp":
+                if has_structured_advanced_state:
+                    base = SyndataSettings.get_defaults_udp().to_dict()
+                    base.update(syndata_dict)
+                else:
+                    base = SyndataSettings.get_defaults_udp().to_dict()
+                    base["out_range"] = 0
+                    base["out_range_mode"] = "n"
+                cat.syndata_udp = SyndataSettings.from_dict(base)
 
             # Set args based on protocol
             if block.protocol == "tcp":
@@ -425,6 +426,39 @@ def _parse_timestamps_from_header(header: str) -> Tuple[str, str]:
     """Backward-compatible helper returning (created, modified) only."""
     created, modified, _desc, _icon = _parse_metadata_from_header(header)
     return created, modified
+
+
+def _has_meaningful_structured_advanced_state(data: object) -> bool:
+    if not isinstance(data, dict) or not data:
+        return False
+
+    for key, value in data.items():
+        if key == "enabled":
+            if bool(value):
+                return True
+            continue
+        if key == "send_enabled":
+            if bool(value):
+                return True
+            continue
+        if key in {
+            "blob",
+            "tls_mod",
+            "autottl_delta",
+            "autottl_min",
+            "autottl_max",
+            "out_range",
+            "out_range_mode",
+            "tcp_flags_unset",
+            "send_repeats",
+            "send_ip_ttl",
+            "send_ip6_ttl",
+            "send_ip_id",
+            "send_badsum",
+        }:
+            return True
+
+    return False
 
 
 def save_preset(preset: Preset) -> bool:
@@ -619,49 +653,6 @@ def rename_preset(old_name: str, new_name: str) -> bool:
 
     except Exception as e:
         log(f"Error renaming preset: {e}", "ERROR")
-        return False
-
-
-# ============================================================================
-# ACTIVE PRESET OPERATIONS
-# ============================================================================
-
-def get_active_preset_name() -> Optional[str]:
-    """
-    Gets name of currently selected preset from the core selection state.
-
-    Returns:
-        Selected preset name or None if not set
-    """
-    try:
-        selected = _core_selection_service().ensure_selected_preset(_core_engine_id(), "Default")
-        if selected is not None:
-            return selected.manifest.name
-    except Exception as e:
-        log(f"Error reading selected preset from core state: {e}", "DEBUG")
-    return None
-
-
-def set_active_preset_name(name: str) -> bool:
-    """
-    Sets selected preset in the core selection state.
-
-    Args:
-        name: Preset name
-
-    Returns:
-        True if saved successfully
-    """
-    value = (name or "").strip()
-    try:
-        if value:
-            _core_selection_service().select_preset_by_name(_core_engine_id(), value)
-        else:
-            _core_selection_service().clear_selection(_core_engine_id())
-        log(f"Set selected preset to '{value}'", "DEBUG")
-        return True
-    except Exception as e:
-        log(f"Error saving selected preset to core state: {e}", "ERROR")
         return False
 
 

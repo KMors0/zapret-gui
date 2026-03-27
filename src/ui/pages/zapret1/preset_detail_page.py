@@ -11,9 +11,9 @@ class Zapret1PresetDetailPage(PresetSubpageBase):
         return "Пресет Zapret 1"
 
     def _create_manager(self):
-        from preset_zapret1 import PresetManagerV1
+        from core.presets.direct_facade import DirectPresetFacade
 
-        return PresetManagerV1()
+        return DirectPresetFacade.from_launch_method("direct_zapret1")
 
     def _get_preset_path(self, name: str) -> Path:
         from preset_zapret1 import get_preset_path_v1

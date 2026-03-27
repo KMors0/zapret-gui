@@ -197,17 +197,16 @@ def infer_strategy_id_from_args(
         # Keep the category enabled in UI when args are present.
         return "custom"
 
-    # Fallback: strip --lua-desync=syndata: and --lua-desync=send: lines from both
-    # sides and retry. In basic direct mode, extract_strategy_args() strips these lines
-    # from block args before storing them in cat.tcp_args, but catalog strategy entries
-    # may embed syndata in their own args. Without this fallback, strategies that contain
-    # syndata in the catalog would fail inference and reset the UI selection.
+    # Fallback: strip non-identity transport helpers from both sides and retry.
+    # In basic direct mode, extracted preset args may already omit send/syndata/out-range
+    # lines while catalog entries still contain them.
     def _strip_syndata_lines(a: str) -> str:
         def _is_syndata_or_send(ln: str) -> bool:
             s = ln.strip().lower()
             is_syndata = s == "--lua-desync=syndata" or s.startswith("--lua-desync=syndata:")
-            is_send = s.startswith("--lua-desync=send:")
-            return is_syndata or is_send
+            is_send = s == "--lua-desync=send" or s.startswith("--lua-desync=send:")
+            is_out_range = s.startswith("--out-range") or s.startswith("--in-range")
+            return is_syndata or is_send or is_out_range
         return "\n".join(ln for ln in a.splitlines() if not _is_syndata_or_send(ln))
 
     normalized_input_stripped = normalize_args(_strip_syndata_lines(args))

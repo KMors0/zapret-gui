@@ -1,12 +1,11 @@
 # preset_zapret1/preset_manager.py
-"""High-level preset manager for Zapret 1 (direct_zapret1) mode."""
+"""Mutation shell for direct_zapret1 source presets and runtime sync."""
 
 import os
 import re
-import shutil
 from datetime import datetime
 from pathlib import Path, PureWindowsPath
-from typing import Callable, Dict, List, Optional
+from typing import Callable, List, Optional
 
 from log import log
 
@@ -18,17 +17,14 @@ from .preset_model import (
     validate_preset_v1,
 )
 from .preset_storage import (
-    get_active_preset_name_v1,
-    get_active_preset_path_v1,
     get_preset_path_v1,
-    get_presets_dir_v1,
     preset_exists_v1,
     save_preset_v1,
 )
 
 
 class PresetManagerV1:
-    """High-level manager for Zapret 1 preset operations."""
+    """Direct mutation shell over selected source preset state for Zapret 1."""
 
     def __init__(
         self,
@@ -68,9 +64,6 @@ class PresetManagerV1:
     def preset_exists(self, name: str) -> bool:
         return self._get_store().preset_exists(name)
 
-    def get_preset_count(self) -> int:
-        return len(self._get_store().get_preset_names())
-
     def load_preset(self, name: str) -> Optional[PresetV1]:
         return self._get_store().get_preset(name)
 
@@ -98,7 +91,7 @@ class PresetManagerV1:
             try:
                 return self._get_store().get_active_preset_name()
             except Exception:
-                return get_active_preset_name_v1()
+                return None
 
     def get_active_preset(self) -> Optional[PresetV1]:
         """Loads the currently selected source preset with caching."""
@@ -134,9 +127,6 @@ class PresetManagerV1:
             preset_path = get_direct_flow_coordinator().get_selected_source_path("direct_zapret1")
             if preset_path.exists():
                 return os.path.getmtime(str(preset_path))
-            active_path = get_active_preset_path_v1()
-            if active_path.exists():
-                return os.path.getmtime(str(active_path))
             return 0.0
         except Exception:
             return 0.0
@@ -166,33 +156,6 @@ class PresetManagerV1:
     def _notify_list_changed(self) -> None:
         self._get_store().notify_presets_changed()
 
-    def switch_preset(self, name: str, reload_dpi: bool = True) -> bool:
-        """Selects a preset and regenerates the Zapret 1 launch config."""
-        if not preset_exists_v1(name):
-            log(f"Cannot switch V1: preset '{name}' not found", "ERROR")
-            return False
-
-        try:
-            from core.services import get_direct_flow_coordinator
-
-            profile = get_direct_flow_coordinator().select_preset("direct_zapret1", name)
-
-            self._invalidate_active_preset_cache()
-            self._get_store().notify_preset_switched(profile.preset_name)
-
-            if reload_dpi and self.on_dpi_reload_needed:
-                self.on_dpi_reload_needed()
-
-            log(f"Switched V1 to preset '{profile.preset_name}'", "INFO")
-
-            if self.on_preset_switched:
-                self.on_preset_switched(profile.preset_name)
-            return True
-
-        except Exception as e:
-            log(f"Error switching V1 preset: {e}", "ERROR")
-            return False
-
     def create_preset(self, name: str, from_current: bool = True) -> Optional[PresetV1]:
         if self.preset_exists(name):
             log(f"Cannot create V1: preset '{name}' already exists", "WARNING")
@@ -204,19 +167,6 @@ class PresetManagerV1:
             return self.load_preset(name)
         except Exception as e:
             log(f"Error creating V1 preset: {e}", "ERROR")
-            return None
-
-    def create_default_preset(self, name: str = "Default") -> Optional[PresetV1]:
-        if self.preset_exists(name):
-            log(f"Cannot create V1: preset '{name}' already exists", "WARNING")
-            return None
-        try:
-            self._get_facade().create(name, from_current=False)
-            self._notify_list_changed()
-            log(f"Created V1 preset '{name}' from default template", "INFO")
-            return self.load_preset(name)
-        except Exception as e:
-            log(f"Error creating V1 default preset: {e}", "ERROR")
             return None
 
     def delete_preset(self, name: str) -> bool:
@@ -262,7 +212,32 @@ class PresetManagerV1:
             return False
 
     def sync_preset_to_active_file(self, preset: PresetV1) -> bool:
-        """Regenerates the Zapret 1 launch config from a source preset."""
+        """
+        Refreshes the Zapret 1 launch config from the selected source preset.
+
+        For the selected preset we must preserve the raw source text, because
+        imported multi-block presets are already launch-ready and a parse +
+        regenerate cycle can drop unsupported layout/details. Only fall back to
+        model-based sync for non-selected presets.
+        """
+        preset_name = str(getattr(preset, "name", "") or "").strip()
+        try:
+            selected_name = str(self.get_active_preset_name() or "").strip()
+        except Exception:
+            selected_name = ""
+
+        if preset_name and selected_name and preset_name.lower() == selected_name.lower():
+            try:
+                from core.services import get_direct_flow_coordinator
+
+                get_direct_flow_coordinator().refresh_selected_runtime("direct_zapret1")
+                return True
+            except PermissionError:
+                raise
+            except Exception as e:
+                log(f"Error refreshing V1 generated launch config from selected source preset: {e}", "ERROR")
+                return False
+
         return self._get_sync_layer().sync_preset(preset)
 
     @staticmethod
@@ -462,8 +437,20 @@ class PresetManagerV1:
             if not active_name:
                 active_name = name_by_key.get("default", "") or names[0]
 
-            if active_name and not self.switch_preset(active_name, reload_dpi=False):
-                log(f"V1 bulk reset: failed to re-apply selected preset '{active_name}'", "WARNING")
+            if active_name:
+                try:
+                    from core.services import get_direct_flow_coordinator
+
+                    profile = get_direct_flow_coordinator().select_preset("direct_zapret1", active_name)
+                    self._invalidate_active_preset_cache()
+                    self._get_store().notify_preset_switched(profile.preset_name)
+                    if self.on_preset_switched:
+                        try:
+                            self.on_preset_switched(profile.preset_name)
+                        except Exception:
+                            pass
+                except Exception as e:
+                    log(f"V1 bulk reset: failed to re-apply selected preset '{active_name}': {e}", "WARNING")
 
             return (success_count, total_count, failed)
         except Exception as e:
@@ -603,9 +590,3 @@ class PresetManagerV1:
             save_preset_v1(preset)
             self.invalidate_preset_cache(preset.name)
         return self.sync_preset_to_active_file(preset)
-
-    def ensure_presets_dir(self) -> Path:
-        return get_presets_dir_v1()
-
-    def get_active_preset_path(self) -> Path:
-        return get_active_preset_path_v1()

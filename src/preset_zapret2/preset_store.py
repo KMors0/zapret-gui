@@ -27,8 +27,6 @@ Usage:
 
 from __future__ import annotations
 
-import os
-from pathlib import Path
 from typing import Dict, List, Optional
 
 from PyQt6.QtCore import QObject, pyqtSignal
@@ -70,13 +68,10 @@ class PresetStore(QObject):
         # {preset_name: Preset}
         self._presets: Dict[str, "Preset"] = {}
 
-        # mtime tracking for preset files: {name: mtime}
-        self._preset_mtimes: Dict[str, float] = {}
-
         # Flag: initial load done?
         self._loaded = False
 
-        # Active preset name (cached from INI)
+        # Cached selected preset name from direct core state.
         self._active_name: Optional[str] = None
 
     # ── Public API: Read ─────────────────────────────────────────────────
@@ -160,10 +155,9 @@ class PresetStore(QObject):
 
     def _do_full_load(self) -> None:
         """Reads all presets from disk into memory."""
-        from .preset_storage import list_presets, load_preset, get_preset_path
+        from .preset_storage import list_presets, load_preset
 
         self._presets.clear()
-        self._preset_mtimes.clear()
 
         names = list_presets()
         for name in names:
@@ -171,12 +165,6 @@ class PresetStore(QObject):
                 preset = load_preset(name)
                 if preset is not None:
                     self._presets[name] = preset
-                    try:
-                        path = get_preset_path(name)
-                        if path.exists():
-                            self._preset_mtimes[name] = os.path.getmtime(str(path))
-                    except Exception:
-                        pass
             except Exception as e:
                 log(f"PresetStore: error loading preset '{name}': {e}", "DEBUG")
 
@@ -192,22 +180,15 @@ class PresetStore(QObject):
 
     def _reload_single_preset(self, name: str) -> None:
         """Re-reads a single preset from disk into the store."""
-        from .preset_storage import load_preset, get_preset_path
+        from .preset_storage import load_preset
 
         try:
             preset = load_preset(name)
             if preset is not None:
                 self._presets[name] = preset
-                try:
-                    path = get_preset_path(name)
-                    if path.exists():
-                        self._preset_mtimes[name] = os.path.getmtime(str(path))
-                except Exception:
-                    pass
             else:
                 # Preset was deleted or became unreadable
                 self._presets.pop(name, None)
-                self._preset_mtimes.pop(name, None)
         except Exception as e:
             log(f"PresetStore: error reloading preset '{name}': {e}", "DEBUG")
 

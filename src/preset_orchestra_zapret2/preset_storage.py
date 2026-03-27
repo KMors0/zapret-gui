@@ -272,11 +272,11 @@ def load_preset(name: str) -> Optional[Preset]:
             # Restore per-protocol advanced settings from syndata_dict (if available).
             if hasattr(block, 'syndata_dict') and block.syndata_dict:
                 if block.protocol == "tcp":
-                    base = cat.syndata_tcp.to_dict()
+                    base = SyndataSettings.get_defaults().to_dict()
                     base.update(block.syndata_dict)
                     cat.syndata_tcp = SyndataSettings.from_dict(base)
                 elif block.protocol == "udp":
-                    base = cat.syndata_udp.to_dict()
+                    base = SyndataSettings.get_defaults_udp().to_dict()
                     base.update(block.syndata_dict)
                     cat.syndata_udp = SyndataSettings.from_dict(base)
             else:

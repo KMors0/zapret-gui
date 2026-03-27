@@ -190,9 +190,14 @@ class PresetRepository:
         existing_data: list[dict[str, str]] = []
         if path.exists():
             try:
-                existing_data = json.loads(_read_text(path) or "[]")
-            except Exception:
-                existing_data = []
+                raw_text = _read_text(path) or "[]"
+            except OSError as exc:
+                raise RuntimeError(f"Failed to read preset index: {path}") from exc
+
+            try:
+                existing_data = json.loads(raw_text)
+            except json.JSONDecodeError as exc:
+                raise RuntimeError(f"Invalid preset index JSON: {path}") from exc
 
         manifests_by_file = {}
         used_ids: set[str] = set()

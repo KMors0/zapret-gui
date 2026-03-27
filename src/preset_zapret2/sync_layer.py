@@ -4,10 +4,264 @@ import os
 from datetime import datetime
 from typing import Callable, Optional
 
+from config import REGISTRY_PATH
 from log import log
 
+from .ports import subtract_port_specs, union_port_specs
 from .preset_model import DEFAULT_PRESET_ICON_COLOR, Preset, normalize_preset_icon_color
 from .preset_storage import get_active_preset_path
+
+
+def _strip_debug_from_base_args(base_args: str) -> str:
+    """Keep runtime-only --debug out of source preset content."""
+    try:
+        lines = (base_args or "").splitlines()
+        kept: list[str] = []
+        for raw in lines:
+            stripped = raw.strip()
+            if not stripped:
+                continue
+            if stripped.lower().startswith("--debug"):
+                continue
+            kept.append(stripped)
+        return "\n".join(kept).strip()
+    except Exception:
+        return (base_args or "").strip()
+
+
+def inject_debug_into_base_args(base_args: str) -> str:
+    """Apply runtime --debug injection from direct_zapret2 registry settings."""
+    import winreg
+
+    cleaned = _strip_debug_from_base_args(base_args)
+
+    enabled = False
+    debug_file = ""
+    try:
+        direct_path = rf"{REGISTRY_PATH}\DirectMethod"
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, direct_path) as key:
+            value, _ = winreg.QueryValueEx(key, "DebugLogEnabled")
+            enabled = bool(value)
+            try:
+                debug_file, _ = winreg.QueryValueEx(key, "DebugLogFile")
+            except Exception:
+                debug_file = ""
+    except Exception:
+        enabled = False
+
+    if not enabled:
+        return cleaned
+
+    if not debug_file:
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        debug_file = f"logs/zapret_winws2_debug_{timestamp}.log"
+        try:
+            direct_path = rf"{REGISTRY_PATH}\DirectMethod"
+            with winreg.CreateKey(winreg.HKEY_CURRENT_USER, direct_path) as key:
+                winreg.SetValueEx(key, "DebugLogFile", 0, winreg.REG_SZ, debug_file)
+        except Exception:
+            pass
+
+    debug_file_norm = str(debug_file).replace("\\", "/").lstrip("@").lstrip("/")
+    debug_line = f"--debug=@{debug_file_norm}"
+
+    lines = cleaned.splitlines() if cleaned else []
+    insert_at = 0
+    for i, raw in enumerate(lines):
+        if raw.strip().startswith("--lua-init="):
+            insert_at = i + 1
+
+    lines.insert(insert_at, debug_line)
+    return "\n".join(lines).strip()
+
+
+def update_wf_out_ports_in_base_args(preset: Preset) -> str:
+    """Normalize wf out-port args from enabled category filters."""
+    from .base_filter import build_category_base_filter_lines
+    from .preset_defaults import get_builtin_preset_content
+
+    base_args = preset.base_args or ""
+    lines = base_args.splitlines()
+
+    marker_prefix = "# AutoWFOutExtra:"
+    marker_prefix_l = marker_prefix.lower()
+
+    existing_wf_tcp = ""
+    existing_wf_udp = ""
+    prev_extra_tcp = ""
+    prev_extra_udp = ""
+    marker_present = False
+    keep_empty_marker = False
+    for raw in lines:
+        stripped = raw.strip()
+        if stripped.startswith("--wf-tcp-out="):
+            existing_wf_tcp = stripped.split("=", 1)[1].strip()
+        elif stripped.startswith("--wf-udp-out="):
+            existing_wf_udp = stripped.split("=", 1)[1].strip()
+        elif stripped.lower().startswith(marker_prefix_l):
+            marker_present = True
+            payload = stripped.split(":", 1)[1].strip() if ":" in stripped else ""
+            for token in payload.split():
+                k, _sep, v = token.partition("=")
+                k_l = k.strip().lower()
+                if k_l == "tcp":
+                    prev_extra_tcp = v.strip()
+                elif k_l == "udp":
+                    prev_extra_udp = v.strip()
+
+    if not marker_present and (preset.name or "").strip().lower() == "default":
+        try:
+            template_tcp = ""
+            template_udp = ""
+            template = get_builtin_preset_content("Default") or ""
+            for raw in template.splitlines():
+                line = raw.strip()
+                if line.startswith("--wf-tcp-out="):
+                    template_tcp = line.split("=", 1)[1].strip()
+                    if template_udp:
+                        break
+                elif line.startswith("--wf-udp-out="):
+                    template_udp = line.split("=", 1)[1].strip()
+                    if template_tcp:
+                        break
+
+            if template_tcp:
+                existing_wf_tcp = template_tcp
+            if template_udp:
+                existing_wf_udp = template_udp
+            if template_tcp or template_udp:
+                keep_empty_marker = True
+        except Exception:
+            pass
+
+    base_wf_tcp = subtract_port_specs(existing_wf_tcp, prev_extra_tcp) if prev_extra_tcp else (existing_wf_tcp or "")
+    base_wf_udp = subtract_port_specs(existing_wf_udp, prev_extra_udp) if prev_extra_udp else (existing_wf_udp or "")
+
+    if base_wf_tcp:
+        base_wf_tcp = union_port_specs([base_wf_tcp])
+    if base_wf_udp:
+        base_wf_udp = union_port_specs([base_wf_udp])
+
+    tcp_specs: list[str] = []
+    udp_specs: list[str] = []
+
+    for cat_name, cat in preset.categories.items():
+        if cat.tcp_enabled and cat.has_tcp():
+            base_filter_lines = build_category_base_filter_lines(cat_name, cat.filter_mode)
+            spec = ""
+            for token in base_filter_lines:
+                token_s = token.strip()
+                if token_s.startswith("--filter-tcp="):
+                    spec = token_s.split("=", 1)[1].strip()
+                    break
+            if not spec:
+                spec = (cat.tcp_port or "").strip()
+            if spec:
+                tcp_specs.append(spec)
+
+        if cat.udp_enabled and cat.has_udp():
+            base_filter_lines = build_category_base_filter_lines(cat_name, cat.filter_mode)
+            spec = ""
+            for token in base_filter_lines:
+                token_s = token.strip()
+                if token_s.startswith("--filter-udp="):
+                    spec = token_s.split("=", 1)[1].strip()
+                    break
+            if not spec:
+                spec = (cat.udp_port or "").strip()
+            if spec:
+                udp_specs.append(spec)
+
+    cats_wf_tcp = union_port_specs(tcp_specs) if tcp_specs else ""
+    cats_wf_udp = union_port_specs(udp_specs) if udp_specs else ""
+
+    new_extra_tcp = subtract_port_specs(cats_wf_tcp, base_wf_tcp) if cats_wf_tcp else ""
+    new_extra_udp = subtract_port_specs(cats_wf_udp, base_wf_udp) if cats_wf_udp else ""
+
+    new_wf_tcp = union_port_specs([base_wf_tcp, new_extra_tcp]) if (base_wf_tcp or new_extra_tcp) else ""
+    new_wf_udp = union_port_specs([base_wf_udp, new_extra_udp]) if (base_wf_udp or new_extra_udp) else ""
+
+    def _replace_or_add(prefix: str, value: str) -> None:
+        nonlocal lines
+        if not value:
+            return
+        replaced = False
+        out: list[str] = []
+        for raw in lines:
+            if raw.strip().startswith(prefix):
+                out.append(f"{prefix}{value}")
+                replaced = True
+            else:
+                out.append(raw)
+        if not replaced:
+            insert_at = 0
+            for i, raw in enumerate(out):
+                if raw.strip().startswith("--lua-init="):
+                    insert_at = i + 1
+            out.insert(insert_at, f"{prefix}{value}")
+        lines = out
+
+    def _set_marker(extra_tcp: str, extra_udp: str, keep_empty: bool = False) -> None:
+        nonlocal lines
+        parts: list[str] = []
+        if extra_tcp:
+            parts.append(f"tcp={extra_tcp}")
+        if extra_udp:
+            parts.append(f"udp={extra_udp}")
+        if parts:
+            marker_line = f"{marker_prefix} {' '.join(parts)}".rstrip()
+        elif keep_empty:
+            marker_line = marker_prefix
+        else:
+            marker_line = ""
+
+        out: list[str] = []
+        replaced = False
+        for raw in lines:
+            if raw.strip().lower().startswith(marker_prefix_l):
+                replaced = True
+                if marker_line:
+                    out.append(marker_line)
+            else:
+                out.append(raw)
+
+        if not replaced and marker_line:
+            insert_at = 0
+            for i, raw in enumerate(out):
+                stripped = raw.strip()
+                if stripped.startswith("--wf-"):
+                    insert_at = i + 1
+                elif stripped.startswith("--lua-init=") and insert_at == 0:
+                    insert_at = i + 1
+            out.insert(insert_at, marker_line)
+
+        lines = out
+
+    if new_wf_tcp:
+        _replace_or_add("--wf-tcp-out=", new_wf_tcp)
+    if new_wf_udp:
+        _replace_or_add("--wf-udp-out=", new_wf_udp)
+
+    keep_empty_final = marker_present or keep_empty_marker
+    _set_marker(new_extra_tcp, new_extra_udp, keep_empty=keep_empty_final)
+
+    return "\n".join(lines).strip()
+
+
+def sync_preset_to_runtime(
+    preset: Preset,
+    *,
+    changed_category: str | None = None,
+    on_dpi_reload_needed: Optional[Callable[[], None]] = None,
+    invalidate_cache: Optional[Callable[[], None]] = None,
+) -> bool:
+    layer = Zapret2PresetSyncLayer(
+        on_dpi_reload_needed=on_dpi_reload_needed,
+        invalidate_cache=invalidate_cache,
+        inject_debug_into_base_args=inject_debug_into_base_args,
+        update_wf_out_ports_in_base_args=update_wf_out_ports_in_base_args,
+    )
+    return layer.sync_preset(preset, changed_category=changed_category)
 
 
 class Zapret2PresetSyncLayer:
@@ -185,13 +439,9 @@ class Zapret2PresetSyncLayer:
         strat_lines = [ln.strip() for ln in strategy_text.splitlines() if ln.strip()]
 
         if is_basic_direct:
-            syndata_settings = cat.syndata_tcp if protocol == "tcp" else cat.syndata_udp
-            try:
-                out_range_arg = cat._get_out_range_args(syndata_settings)
-            except Exception:
-                out_range_arg = ""
-            if out_range_arg:
-                args_lines.append(str(out_range_arg).strip())
+            # In basic direct mode the strategy args are the source of truth.
+            # Do not inject structured out-range/send/syndata settings on top,
+            # otherwise mixed state can produce duplicate --out-range lines.
             args_lines.extend(strat_lines)
         else:
             send_present = any(ln.lower().startswith("--lua-desync=send") for ln in strat_lines)

@@ -952,12 +952,13 @@ class PresetManager:
                     strategy_text_clean = "\n".join(strat_lines_no_out).strip()
 
                     parts: list[str] = []
-                    try:
-                        out_range_arg = cat._get_out_range_args(cat.syndata_tcp)
-                    except Exception:
-                        out_range_arg = ""
-                    if out_range_arg:
-                        parts.append(str(out_range_arg).strip())
+                    if not is_basic_direct:
+                        try:
+                            out_range_arg = cat._get_out_range_args(cat.syndata_tcp)
+                        except Exception:
+                            out_range_arg = ""
+                        if out_range_arg:
+                            parts.append(str(out_range_arg).strip())
 
                     try:
                         if bool(getattr(cat.syndata_tcp, "send_enabled", False)) and not send_present:
@@ -1329,13 +1330,18 @@ class PresetManager:
         if category_key not in preset.categories:
             preset.categories[category_key] = self._create_category_with_defaults(category_key)
 
+        try:
+            syndata_value = SyndataSettings.from_dict(syndata.to_dict())
+        except Exception:
+            syndata_value = syndata
+
         protocol_key = self._normalize_syndata_protocol(protocol)
         if protocol_key == "udp":
-            syndata.enabled = False
-            syndata.send_enabled = False
-            preset.categories[category_key].syndata_udp = syndata
+            syndata_value.enabled = False
+            syndata_value.send_enabled = False
+            preset.categories[category_key].syndata_udp = syndata_value
         else:
-            preset.categories[category_key].syndata_tcp = syndata
+            preset.categories[category_key].syndata_tcp = syndata_value
         preset.touch()
 
         if save_and_sync:
@@ -2141,22 +2147,16 @@ class PresetManager:
                     
                     # Update out-range for UDP
                     out_range = extract_out_range_from_args(args)
-                    if out_range.get("enabled"):
-                        cat.syndata_udp.out_range_enabled = True
-                        cat.syndata_udp.out_range_arg = out_range.get("arg", "")
-                    else:
-                        cat.syndata_udp.out_range_enabled = False
+                    cat.syndata_udp.out_range = int(out_range.get("out_range", 0) or 0)
+                    cat.syndata_udp.out_range_mode = str(out_range.get("out_range_mode") or "n")
                 else:
                     cat.tcp_args = pure_strategy_args
                     cat.udp_args = ""
                     
                     # Update syndata/send/out-range for TCP
                     out_range = extract_out_range_from_args(args)
-                    if out_range.get("enabled"):
-                        cat.syndata_tcp.out_range_enabled = True
-                        cat.syndata_tcp.out_range_arg = out_range.get("arg", "")
-                    else:
-                        cat.syndata_tcp.out_range_enabled = False
+                    cat.syndata_tcp.out_range = int(out_range.get("out_range", 0) or 0)
+                    cat.syndata_tcp.out_range_mode = str(out_range.get("out_range_mode") or "n")
                         
                     syndata = extract_syndata_from_args(args)
                     if syndata.get("enabled"):
@@ -2173,7 +2173,7 @@ class PresetManager:
                     send = extract_send_from_args(args)
                     if send.get("send_enabled"):
                         cat.syndata_tcp.send_enabled = True
-                        cat.syndata_tcp.send_repeats = send.get("send_repeats", 1)
+                        cat.syndata_tcp.send_repeats = send.get("send_repeats", 2)
                         cat.syndata_tcp.send_ip_ttl = send.get("send_ip_ttl", 0)
                         cat.syndata_tcp.send_ip6_ttl = send.get("send_ip6_ttl", 0)
                         cat.syndata_tcp.send_ip_id = send.get("send_ip_id", "")
@@ -2193,8 +2193,10 @@ class PresetManager:
                 # so get_full_tcp_args doesn't append default values on top of the raw args.
                 cat.syndata_tcp.enabled = False
                 cat.syndata_tcp.send_enabled = False
-                cat.syndata_tcp.out_range_enabled = False
-                cat.syndata_udp.out_range_enabled = False
+                cat.syndata_tcp.out_range = 0
+                cat.syndata_tcp.out_range_mode = "n"
+                cat.syndata_udp.out_range = 0
+                cat.syndata_udp.out_range_mode = "n"
 
     def set_strategy_selections(
         self,

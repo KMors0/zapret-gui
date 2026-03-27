@@ -1,7 +1,7 @@
 # preset_zapret1/preset_model.py
 """Data models for Zapret 1 preset system.
 
-Simplified version without SyndataSettings.
+Simplified version without a separate SyndataSettings model.
 """
 
 import re
@@ -29,7 +29,8 @@ def normalize_preset_icon_color_v1(value: Optional[str]) -> str:
 class CategoryConfigV1:
     """Configuration for a single category in Zapret 1 preset.
 
-    No SyndataSettings — Zapret 1 (winws.exe) doesn't support Lua.
+    Zapret 1 keeps syndata/autottl-like syntax inline in raw strategy args
+    instead of exposing a separate structured SyndataSettings object.
     """
     name: str
     strategy_id: str = "none"
@@ -40,7 +41,6 @@ class CategoryConfigV1:
     filter_mode: str = "hostlist"  # "hostlist" | "ipset"
     tcp_port: str = "443"
     udp_port: str = "443"
-    sort_order: str = "default"
 
     def get_hostlist_file(self) -> str:
         return f"lists/{self.name}.txt"
@@ -60,11 +60,11 @@ class CategoryConfigV1:
         return bool(self.udp_args.strip())
 
     def get_full_tcp_args(self) -> str:
-        """Returns TCP args (no syndata/send in V1)."""
+        """Returns TCP args exactly as stored in the V1 preset."""
         return self.tcp_args
 
     def get_full_udp_args(self) -> str:
-        """Returns UDP args (no out-range in V1)."""
+        """Returns UDP args exactly as stored in the V1 preset."""
         return self.udp_args
 
     def to_dict(self) -> Dict:
@@ -78,7 +78,6 @@ class CategoryConfigV1:
             "filter_mode": self.filter_mode,
             "tcp_port": self.tcp_port,
             "udp_port": self.udp_port,
-            "sort_order": self.sort_order,
         }
 
     @classmethod
@@ -93,7 +92,6 @@ class CategoryConfigV1:
             filter_mode=data.get("filter_mode", "hostlist"),
             tcp_port=data.get("tcp_port", "443"),
             udp_port=data.get("udp_port", "443"),
-            sort_order=data.get("sort_order", "default"),
         )
 
 

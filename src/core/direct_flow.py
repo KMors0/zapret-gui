@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import os
 from pathlib import Path
 
 from log import log
@@ -150,19 +151,28 @@ class DirectFlowCoordinator:
         method = self._normalize_method(launch_method)
         try:
             if method == "direct_zapret2":
-                from preset_zapret2 import PresetManager, load_preset
+                from preset_zapret2 import load_preset
+                from preset_zapret2.sync_layer import sync_preset_to_runtime
 
                 preset = load_preset(preset_name)
                 if preset is None:
                     raise DirectFlowError(f"Не удалось загрузить source preset: {preset_name}")
-                ok = PresetManager().sync_preset_to_active_file(preset)
+                ok = sync_preset_to_runtime(preset)
             else:
-                from preset_zapret1 import PresetManagerV1, load_preset_v1
-
-                preset = load_preset_v1(preset_name)
-                if preset is None:
-                    raise DirectFlowError(f"Не удалось загрузить source preset: {preset_name}")
-                ok = PresetManagerV1().sync_preset_to_active_file(preset)
+                source_path = self.get_selected_source_path(method)
+                runtime_path = self._runtime_path(method)
+                source_text = source_path.read_text(encoding="utf-8", errors="replace")
+                runtime_path.parent.mkdir(parents=True, exist_ok=True)
+                text = source_text.replace("\r\n", "\n").replace("\r", "\n")
+                if not text.endswith("\n"):
+                    text += "\n"
+                runtime_path.write_text(text, encoding="utf-8")
+                try:
+                    with runtime_path.open("r+b") as handle:
+                        os.fsync(handle.fileno())
+                except Exception:
+                    pass
+                ok = True
         except Exception as exc:
             raise DirectFlowError(f"Не удалось синхронизировать launch config: {exc}") from exc
 

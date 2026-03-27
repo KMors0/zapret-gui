@@ -700,33 +700,17 @@ class Zapret2DirectControlPage(BasePage):
         # using the newly selected strategies catalog (basic vs default).
         try:
             from dpi.zapret2_core_restart import trigger_dpi_reload
-            from preset_zapret2 import PresetManager
+            from core.presets.direct_facade import DirectPresetFacade
 
-            pm = PresetManager(
+            facade = DirectPresetFacade.from_launch_method(
+                "direct_zapret2",
                 on_dpi_reload_needed=lambda: trigger_dpi_reload(
                     self.parent_app,
                     reason="direct_launch_mode_changed",
-                )
+                ),
             )
-            preset = pm.get_active_preset()
-            if preset:
-                try:
-                    selections = pm.get_strategy_selections() or {}
-                    pm.set_strategy_selections(selections, save_and_sync=False)
-                except Exception:
-                    pass
-
-                try:
-                    pm.save_preset(preset)
-                except Exception:
-                    pass
-
-                try:
-                    from core.services import get_direct_flow_coordinator
-
-                    get_direct_flow_coordinator().refresh_selected_runtime("direct_zapret2")
-                except Exception:
-                    pm.sync_preset_to_active_file(preset)
+            selections = facade.get_strategy_selections() or {}
+            facade.set_strategy_selections(selections, save_and_sync=True)
         except Exception:
             pass
 

@@ -1,7 +1,10 @@
 # preset_zapret1/__init__.py
 """Preset management for Zapret 1 (winws.exe) mode.
 
-Simplified version of preset_zapret2 without Lua/orchestra/syndata support.
+Simplified version of preset_zapret2 without a separate SyndataSettings model.
+
+Zapret 1 still supports many syndata/autottl-like flags, but they live directly
+inside raw strategy args rather than in a dedicated structured state layer.
 """
 
 from .preset_model import CategoryConfigV1, PresetV1, validate_preset_v1
@@ -10,8 +13,6 @@ from .preset_storage import (
     get_presets_dir_v1,
     get_preset_path_v1,
     get_active_preset_path_v1,
-    get_active_preset_name_v1,
-    set_active_preset_name_v1,
     load_preset_v1,
     save_preset_v1,
     list_presets_v1,
@@ -51,8 +52,6 @@ __all__ = [
     "get_presets_dir_v1",
     "get_preset_path_v1",
     "get_active_preset_path_v1",
-    "get_active_preset_name_v1",
-    "set_active_preset_name_v1",
     "load_preset_v1",
     "save_preset_v1",
     "list_presets_v1",

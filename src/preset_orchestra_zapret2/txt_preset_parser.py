@@ -789,6 +789,8 @@ def extract_strategy_args(
         if not token:
             continue
 
+        token = re.sub(r':out_range=-[nd]\d+(?=(:|$))', '', token)
+
         token = re.sub(r':strategy=\d+', '', token)
 
         # Skip tokens that are part of category base_filter (important for L7 payload filters),
@@ -806,15 +808,71 @@ def extract_strategy_args(
             continue
         if token_l.startswith('--out-range'):
             continue
-        if token_l.startswith('--lua-desync=syndata:') or \
-           token_l == '--lua-desync=syndata' or \
-           token_l.startswith('--lua-desync=send:') or \
-           token_l == '--lua-desync=send':
+        if token_l.startswith('--lua-desync=syndata') and _can_roundtrip_syndata_token(token):
+            continue
+        if token_l.startswith('--lua-desync=send') and _can_roundtrip_send_token(token):
             continue
 
         strategy_tokens.append(token)
 
     return '\n'.join(strategy_tokens)
+
+
+def _can_roundtrip_send_token(token: str) -> bool:
+    token_l = str(token or "").strip().lower()
+    prefix = "--lua-desync=send"
+    if token_l == prefix:
+        return False
+    if not token_l.startswith(prefix + ":"):
+        return False
+
+    payload = str(token or "").strip()[len(prefix) + 1:]
+    if not payload:
+        return False
+
+    supported = {"repeats", "ttl", "ttl6", "ip_id", "badsum"}
+    for part in payload.split(":"):
+        if "=" not in part:
+            return False
+        key, _sep, value = part.partition("=")
+        key_l = str(key or "").strip().lower()
+        value_s = str(value or "").strip()
+        if key_l not in supported:
+            return False
+        if key_l in {"repeats", "ttl", "ttl6"} and not re.fullmatch(r"-?\d+", value_s):
+            return False
+        if key_l == "badsum" and value_s.lower() not in {"true", "false"}:
+            return False
+    return True
+
+
+def _can_roundtrip_syndata_token(token: str) -> bool:
+    token_l = str(token or "").strip().lower()
+    prefix = "--lua-desync=syndata"
+    if token_l == prefix:
+        return False
+    if not token_l.startswith(prefix + ":"):
+        return False
+
+    payload = str(token or "").strip()[len(prefix) + 1:]
+    if not payload:
+        return False
+
+    supported = {"blob", "tls_mod", "ip_autottl", "tcp_flags_unset"}
+    saw_blob = False
+    for part in payload.split(":"):
+        if "=" not in part:
+            return False
+        key, _sep, value = part.partition("=")
+        key_l = str(key or "").strip().lower()
+        if key_l not in supported:
+            return False
+        if key_l == "blob":
+            saw_blob = True
+        elif key_l == "ip_autottl":
+            if not re.fullmatch(r"-?\d+,\d+-\d+", str(value or "").strip()):
+                return False
+    return saw_blob
 
 
 def extract_syndata_from_args(args: str) -> Dict:
@@ -833,6 +891,9 @@ def extract_syndata_from_args(args: str) -> Dict:
     # Format: --lua-desync=syndata:blob=tls_google:ip_autottl=-2,3-20
     match = re.search(r'--lua-desync=syndata:([^\s\n]+)', args)
     if match:
+        full_token = match.group(0)
+        if not _can_roundtrip_syndata_token(full_token):
+            return result
         result['enabled'] = True
         syndata_str = match.group(1)
         # Format: blob=tls_google:ip_autottl=-2,3-20:tls_mod=value
@@ -882,7 +943,9 @@ def extract_out_range_from_args(args: str) -> Dict:
     """
     match = re.search(r'--out-range=-([nd])(\d+)', args)
     if not match:
-        return {}
+        match = re.search(r':out_range=-([nd])(\d+)(?=(:|\s|$))', args)
+        if not match:
+            return {}
 
     mode = match.group(1) or "n"
     value = int(match.group(2))
@@ -909,6 +972,9 @@ def extract_send_from_args(args: str) -> Dict:
     # Format: --lua-desync=send:repeats=2:ttl=0
     match = re.search(r'--lua-desync=send:([^\s\n]+)', args)
     if match:
+        full_token = match.group(0)
+        if not _can_roundtrip_send_token(full_token):
+            return result
         result['send_enabled'] = True
         send_str = match.group(1)
         # Format: repeats=2:ttl=0:badsum=true
@@ -920,11 +986,20 @@ def extract_send_from_args(args: str) -> Dict:
             key, value = part.split('=', 1)
 
             if key == 'repeats':
-                result['send_repeats'] = int(value)
+                try:
+                    result['send_repeats'] = int(value)
+                except ValueError:
+                    continue
             elif key == 'ttl':
-                result['send_ip_ttl'] = int(value)
+                try:
+                    result['send_ip_ttl'] = int(value)
+                except ValueError:
+                    continue
             elif key == 'ttl6':
-                result['send_ip6_ttl'] = int(value)
+                try:
+                    result['send_ip6_ttl'] = int(value)
+                except ValueError:
+                    continue
             elif key == 'ip_id':
                 result['send_ip_id'] = value
             elif key == 'badsum':

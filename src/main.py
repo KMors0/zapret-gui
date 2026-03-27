@@ -741,6 +741,38 @@ class LupiDPIApp(ZapretFluentWindow, MainWindowUI, ThemeSubscriptionManager):
         except Exception as e:
             log(f"Ошибка показа InfoBar запуска DPI: {e}", "DEBUG")
 
+    @pyqtSlot(str)
+    def show_dpi_launch_warning(self, message: str) -> None:
+        text = str(message or "").strip()
+        if not text:
+            return
+
+        try:
+            now = time.time()
+            last_msg = str(getattr(self, "_last_dpi_launch_warning_message", "") or "")
+            last_ts = float(getattr(self, "_last_dpi_launch_warning_ts", 0.0) or 0.0)
+            if text == last_msg and (now - last_ts) < 1.5:
+                return
+            self._last_dpi_launch_warning_message = text
+            self._last_dpi_launch_warning_ts = now
+        except Exception:
+            pass
+
+        try:
+            from qfluentwidgets import InfoBar as _InfoBar, InfoBarPosition as _IBPos
+
+            _InfoBar.warning(
+                title="Предупреждение",
+                content=text,
+                orient=Qt.Orientation.Vertical if len(text) > 90 else Qt.Orientation.Horizontal,
+                isClosable=True,
+                position=_IBPos.TOP,
+                duration=9000,
+                parent=self,
+            )
+        except Exception as e:
+            log(f"Ошибка показа warning InfoBar запуска DPI: {e}", "DEBUG")
+
     def _add_autofix_button(self, bar, action: str) -> None:
         """Add a 'Fix' button to an InfoBar that runs the auto-fix action."""
         try:

@@ -685,9 +685,12 @@ def set_direct_strategy_selections(selections: dict) -> bool:
             from core.presets.direct_facade import DirectPresetFacade
 
             facade = DirectPresetFacade.from_launch_method("direct_zapret2")
-            for category_key, strategy_id in (selections or {}).items():
-                if category_key in registry.get_all_category_keys():
-                    facade.set_strategy_selection(category_key, strategy_id, save_and_sync=True)
+            payload = {
+                category_key: strategy_id
+                for category_key, strategy_id in (selections or {}).items()
+                if category_key in registry.get_all_category_keys()
+            }
+            facade.set_strategy_selections(payload, save_and_sync=True)
             invalidate_direct_selections_cache()
             log("Выборы стратегий сохранены (selected source preset direct_zapret2)", "DEBUG")
             return True
@@ -697,11 +700,12 @@ def set_direct_strategy_selections(selections: dict) -> bool:
             from core.presets.direct_facade import DirectPresetFacade
 
             facade = DirectPresetFacade.from_launch_method("direct_zapret1")
-            success = True
-            for category_key, strategy_id in (selections or {}).items():
-                if category_key in registry.get_all_category_keys():
-                    result = facade.set_strategy_selection(category_key, strategy_id, save_and_sync=True)
-                    success = success and bool(result)
+            payload = {
+                category_key: strategy_id
+                for category_key, strategy_id in (selections or {}).items()
+                if category_key in registry.get_all_category_keys()
+            }
+            success = bool(facade.set_strategy_selections(payload, save_and_sync=True))
             invalidate_direct_selections_cache()
             log("Выборы стратегий сохранены (selected source preset direct_zapret1)", "DEBUG")
             return success

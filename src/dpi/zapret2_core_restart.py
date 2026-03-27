@@ -92,7 +92,7 @@ def trigger_dpi_reload(
     Унифицированный механизм перезагрузки DPI для режима direct_zapret2.
 
     НОВАЯ АРХИТЕКТУРА (без реестра):
-    - Preset файл уже обновлен UI через PresetManager.sync_preset_to_active_file()
+    - Source preset уже обновлен UI через direct facade / sync layer
     - Hot-reload: ConfigFileWatcher в StrategyRunnerV2 автоматически перезапустит
       winws2.exe когда обнаружит изменение preset-zapret2.txt
     - Эта функция нужна только для немедленного перезапуска если hot-reload выключен

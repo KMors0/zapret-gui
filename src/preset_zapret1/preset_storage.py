@@ -34,12 +34,6 @@ def _core_paths():
     return get_app_paths().engine_paths(_core_engine_id()).ensure_directories()
 
 
-def _core_selection_service():
-    from core.services import get_selection_service
-
-    return get_selection_service()
-
-
 def _get_app_core_path() -> str:
     global _APP_CORE_PATH
     if _APP_CORE_PATH is None:
@@ -115,30 +109,6 @@ def list_presets_v1() -> List[str]:
 
 def preset_exists_v1(name: str) -> bool:
     return get_preset_path_v1(name).exists()
-
-
-def get_active_preset_name_v1() -> Optional[str]:
-    try:
-        selected = _core_selection_service().ensure_selected_preset(_core_engine_id(), "Default")
-        if selected is not None:
-            return selected.manifest.name
-    except Exception as e:
-        log(f"Error reading selected V1 preset from core state: {e}", "DEBUG")
-    return None
-
-
-def set_active_preset_name_v1(name: str) -> bool:
-    value = (name or "").strip()
-    try:
-        if value:
-            _core_selection_service().select_preset_by_name(_core_engine_id(), value)
-        else:
-            _core_selection_service().clear_selection(_core_engine_id())
-        log(f"Set selected V1 preset to '{value}'", "DEBUG")
-        return True
-    except Exception as e:
-        log(f"Error saving selected V1 preset to core state: {e}", "ERROR")
-        return False
 
 
 def _parse_metadata_from_header_v1(header: str) -> Tuple[str, str, str, str]:

@@ -27,8 +27,9 @@ class Zapret2PresetDetailPage(PresetSubpageBase):
         except Exception:
             pass
 
-        from preset_zapret2 import PresetManager
-        return PresetManager()
+        from core.presets.direct_facade import DirectPresetFacade
+
+        return DirectPresetFacade.from_launch_method("direct_zapret2")
 
     def _get_preset_path(self, name: str) -> Path:
         try:

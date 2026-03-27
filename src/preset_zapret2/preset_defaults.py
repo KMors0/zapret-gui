@@ -389,14 +389,14 @@ def ensure_templates_copied_to_presets() -> bool:
     - Deleted built-ins are restored automatically.
     - Before overwrite, old preset content is backed up to
       `<presets_dir>/_builtin_version_backups/`.
-    - If an updated preset is currently active, `preset-zapret2.txt`
-      is synced immediately.
+    - If an updated preset is currently selected, the generated runtime config
+      is regenerated through the direct flow.
 
     Returns True on success.
     """
     try:
         from config import get_zapret_presets_v2_dir
-        from .preset_storage import get_active_preset_name, get_active_preset_path
+        from core.services import get_direct_flow_coordinator
 
         templates = get_preset_templates()
         if not templates:
@@ -407,7 +407,12 @@ def ensure_templates_copied_to_presets() -> bool:
 
         backups_dir = presets_dir / "_builtin_version_backups"
         deleted_lower = {d.lower() for d in get_deleted_preset_names()}
-        active_key = (get_active_preset_name() or "").strip().lower()
+        try:
+            coordinator = get_direct_flow_coordinator()
+            active_key = (coordinator.get_selected_preset_name("direct_zapret2") or "").strip().lower()
+        except Exception:
+            coordinator = None
+            active_key = ""
 
         created_count = 0
         updated_count = 0
@@ -465,12 +470,9 @@ def ensure_templates_copied_to_presets() -> bool:
                 if was_deleted and created:
                     restored_deleted_count += 1
 
-                # Keep runtime active file in sync if this preset is active.
-                if active_key and active_key == name_key:
+                if coordinator is not None and active_key and active_key == name_key:
                     try:
-                        active_path = get_active_preset_path()
-                        active_path.parent.mkdir(parents=True, exist_ok=True)
-                        active_path.write_text(content, encoding="utf-8")
+                        coordinator.refresh_selected_runtime("direct_zapret2")
                     except Exception:
                         pass
 

@@ -332,21 +332,25 @@ def update_changed_v1_templates_in_presets() -> int:
     touched.  Before overwriting, the old file is backed up to
     presets_v1/_builtin_version_backups/.
 
-    If the updated preset is the currently active one, preset-zapret1.txt is
-    also refreshed immediately.
+    If the updated preset is currently selected, the generated runtime config
+    is regenerated through the direct flow.
 
     Returns number of files updated.
     """
-    from .preset_storage import (
-        get_presets_dir_v1,
-        get_active_preset_name_v1,
-        get_active_preset_path_v1,
-    )
+    from .preset_storage import get_presets_dir_v1
     from preset_zapret2.preset_defaults import (
         _extract_builtin_version,
         _is_newer_builtin_version,
         _sanitize_version_for_filename,
     )
+    try:
+        from core.services import get_direct_flow_coordinator
+
+        coordinator = get_direct_flow_coordinator()
+        active_name = (coordinator.get_selected_preset_name("direct_zapret1") or "").strip().lower()
+    except Exception:
+        coordinator = None
+        active_name = ""
 
     invalidate_templates_cache_v1()
 
@@ -356,7 +360,6 @@ def update_changed_v1_templates_in_presets() -> int:
 
     presets_dir = get_presets_dir_v1()
     backups_dir = presets_dir / "_builtin_version_backups"
-    active_name = (get_active_preset_name_v1() or "").strip().lower()
     updated = 0
 
     for name, src_path in templates.items():
@@ -392,12 +395,10 @@ def update_changed_v1_templates_in_presets() -> int:
             updated += 1
             log(f"V1 preset '{name}' updated to BuiltinVersion {template_version}", "INFO")
 
-            # If this preset is currently active, sync preset-zapret1.txt too.
-            if active_name and active_name == name.lower():
+            if coordinator is not None and active_name and active_name == name.lower():
                 try:
-                    active_path = get_active_preset_path_v1()
-                    shutil.copy2(str(src_path), str(active_path))
-                    log(f"V1 active file synced for updated preset '{name}'", "DEBUG")
+                    coordinator.refresh_selected_runtime("direct_zapret1")
+                    log(f"V1 runtime regenerated for updated preset '{name}'", "DEBUG")
                 except Exception:
                     pass
 

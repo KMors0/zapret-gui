@@ -2,7 +2,7 @@
 Контроллер для управления DPI - содержит всю логику запуска и остановки
 """
 
-from PyQt6.QtCore import QThread, QObject, pyqtSignal, QMetaObject, Qt, Q_ARG
+from PyQt6.QtCore import QThread, QObject, pyqtSignal, QMetaObject, Qt, Q_ARG, QTimer
 from pathlib import Path
 from strategy_menu import get_strategy_launch_method
 from log import log

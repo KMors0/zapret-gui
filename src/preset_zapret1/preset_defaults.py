@@ -343,15 +343,6 @@ def update_changed_v1_templates_in_presets() -> int:
         _is_newer_builtin_version,
         _sanitize_version_for_filename,
     )
-    try:
-        from core.services import get_direct_flow_coordinator
-
-        coordinator = get_direct_flow_coordinator()
-        active_name = (coordinator.get_selected_preset_name("direct_zapret1") or "").strip().lower()
-    except Exception:
-        coordinator = None
-        active_name = ""
-
     invalidate_templates_cache_v1()
 
     templates = _load_v1_templates_from_disk()
@@ -394,13 +385,6 @@ def update_changed_v1_templates_in_presets() -> int:
             shutil.copy2(str(src_path), str(dest))
             updated += 1
             log(f"V1 preset '{name}' updated to BuiltinVersion {template_version}", "INFO")
-
-            if coordinator is not None and active_name and active_name == name.lower():
-                try:
-                    coordinator.refresh_selected_runtime("direct_zapret1")
-                    log(f"V1 runtime regenerated for updated preset '{name}'", "DEBUG")
-                except Exception:
-                    pass
 
         except Exception as e:
             log(f"Failed to update V1 preset '{name}' from template: {e}", "DEBUG")
@@ -486,13 +470,21 @@ def ensure_default_preset_exists_v1() -> bool:
     Returns True if Default preset exists or was created successfully.
     """
     try:
-        from core.services import get_direct_flow_coordinator
+        from .preset_storage import get_presets_dir_v1
 
-        get_direct_flow_coordinator().ensure_launch_profile(
-            "direct_zapret1",
-            require_filters=False,
-        )
+        ensure_v1_templates_copied_to_presets()
+
+        presets_dir = get_presets_dir_v1()
+        default_path = presets_dir / "Default.txt"
+        if default_path.exists():
+            return True
+
+        content = get_builtin_preset_content_v1("Default")
+        if not content:
+            return False
+
+        default_path.write_text(content, encoding="utf-8")
         return True
     except Exception as e:
-        log(f"Error ensuring direct_zapret1 launch config: {e}", "DEBUG")
+        log(f"Error ensuring V1 default preset: {e}", "DEBUG")
         return False

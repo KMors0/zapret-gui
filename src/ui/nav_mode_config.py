@@ -7,8 +7,7 @@ _sync_nav_visibility() instead of a hardcoded targets dict.
 
 Adding a new mode-specific page:
   1. Add the rule to get_nav_visibility() below.
-  2. Add _add(PageName.YOUR_PAGE) to _init_navigation() in main_window.py
-     (right after CONTROL/ZAPRET2_DIRECT_CONTROL block).
+  2. Add the page to the mode-gated navigation list in main_window.py.
   3. Add icon + label to _NAV_ICONS / _NAV_LABELS in main_window.py.
 """
 
@@ -18,8 +17,8 @@ from ui.page_names import PageName
 def get_nav_visibility(method: str) -> dict[PageName, bool]:
     """Return {PageName: should_be_visible} for the given launch method.
 
-    All pages listed here must be present in _nav_items (added via _add()
-    in _init_navigation). Pages absent from the dict are not touched.
+    Pages listed here may be created lazily. _sync_nav_visibility() will add a
+    missing nav item on demand when a mode starts requiring it.
     """
     m = (method or "").strip().lower()
 

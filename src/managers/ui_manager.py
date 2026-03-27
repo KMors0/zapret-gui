@@ -80,6 +80,13 @@ class UIManager:
         is_running, autostart_active = pending
         try:
             strategy_name = self._get_strategy_name()
+            launch_method = ""
+            try:
+                from strategy_menu import get_strategy_launch_method
+
+                launch_method = (get_strategy_launch_method() or "").strip().lower()
+            except Exception:
+                launch_method = ""
             
             # Обновляем главную страницу
             if hasattr(self.app, 'home_page'):
@@ -113,7 +120,7 @@ class UIManager:
             if hasattr(self.app, 'orchestra_zapret2_control_page'):
                 try:
                     self.app.orchestra_zapret2_control_page.update_status(is_running)
-                    if strategy_name:
+                    if strategy_name and launch_method == "direct_zapret2_orchestra":
                         self.app.orchestra_zapret2_control_page.update_strategy(strategy_name)
                 except Exception:
                     pass
@@ -175,4 +182,3 @@ class UIManager:
             self.app.subscription_btn.setText(text)
         except Exception as e:
             log(f"Ошибка обновления кнопки подписки: {e}", "ERROR")
-

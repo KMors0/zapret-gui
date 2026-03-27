@@ -28,6 +28,10 @@ except ImportError:
     SearchLineEdit = QLineEdit
 
 from ui.page_names import PageName, SectionName
+from ui.mode_page_scope import (
+    get_sidebar_search_pages_for_method,
+    should_add_nav_page_on_init,
+)
 from ui.text_catalog import (
     find_search_entries,
     format_search_result,
@@ -450,6 +454,7 @@ class MainWindowUI:
             return
 
         POS_SCROLL = NavigationItemPosition.SCROLL
+        current_method = self._get_launch_method()
 
         self._nav_items: dict = {}
         self._nav_search_query = ""
@@ -461,6 +466,8 @@ class MainWindowUI:
         self._sidebar_search_titlebar_attached = False
 
         def _add(page_name, position=POS_SCROLL):
+            if not should_add_nav_page_on_init(page_name, current_method):
+                return
             self._add_nav_item(page_name, position)
 
         nav = self.navigationInterface  # shorthand
@@ -687,7 +694,7 @@ class MainWindowUI:
 
     def _get_sidebar_search_pages(self) -> set[PageName]:
         """Pages allowed for sidebar search suggestions and routing."""
-        return set(_PAGE_CLASS_SPECS.keys())
+        return get_sidebar_search_pages_for_method(self._get_launch_method(), set(_PAGE_CLASS_SPECS.keys()))
 
     def _setup_sidebar_search_completer(self) -> None:
         if self._sidebar_search_nav_widget is None:

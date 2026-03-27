@@ -1,5 +1,4 @@
 # UI module exports
-from .main_window import MainWindowUI
 from .page_names import (
     PageName,
     SectionName,
@@ -21,3 +20,10 @@ __all__ = [
     'STRATEGY_PAGES',
 ]
 
+
+def __getattr__(name):
+    if name == 'MainWindowUI':
+        from .main_window import MainWindowUI
+
+        return MainWindowUI
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

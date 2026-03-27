@@ -396,7 +396,6 @@ def ensure_templates_copied_to_presets() -> bool:
     """
     try:
         from config import get_zapret_presets_v2_dir
-        from core.services import get_direct_flow_coordinator
 
         templates = get_preset_templates()
         if not templates:
@@ -407,12 +406,6 @@ def ensure_templates_copied_to_presets() -> bool:
 
         backups_dir = presets_dir / "_builtin_version_backups"
         deleted_lower = {d.lower() for d in get_deleted_preset_names()}
-        try:
-            coordinator = get_direct_flow_coordinator()
-            active_key = (coordinator.get_selected_preset_name("direct_zapret2") or "").strip().lower()
-        except Exception:
-            coordinator = None
-            active_key = ""
 
         created_count = 0
         updated_count = 0
@@ -469,12 +462,6 @@ def ensure_templates_copied_to_presets() -> bool:
                     updated_count += 1
                 if was_deleted and created:
                     restored_deleted_count += 1
-
-                if coordinator is not None and active_key and active_key == name_key:
-                    try:
-                        coordinator.refresh_selected_runtime("direct_zapret2")
-                    except Exception:
-                        pass
 
             # If deleted marker exists for this built-in, clear it because
             # built-ins are now always auto-restored.

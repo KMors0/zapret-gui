@@ -201,7 +201,9 @@ class PresetManager:
         Loads the currently active preset with caching.
 
         First checks cache validity (file mtime).
-        If cache is invalid, loads from presets/ folder or parses preset-zapret2.txt.
+        If cache is invalid, prefers the active runtime file when it exists.
+        When the runtime file is missing, falls back to the preset selected in
+        the active-preset state store without emitting a spurious warning.
 
         Returns:
             Active Preset or None
@@ -213,11 +215,23 @@ class PresetManager:
                 # Cache is valid
                 return self._active_preset_cache
 
-        # Source of truth for active state is preset-zapret2.txt.
-        preset = self._load_from_active_file()
+        active_path = get_active_preset_path()
+        preset = None
 
-        if not preset:
-            # Fallback: load from presets/ folder if active file is missing/corrupted
+        if active_path.exists():
+            # Source of truth for active state is the runtime file when it exists.
+            preset = self._load_from_active_file()
+        else:
+            # The selected preset name is enough to restore UI state while the
+            # runtime file has not been materialized yet.
+            name = get_active_preset_name()
+            if name and preset_exists(name):
+                preset = load_preset(name)
+            else:
+                log("Active preset file not found", "WARNING")
+
+        if not preset and active_path.exists():
+            # Fallback: load from presets/ folder if active file is corrupted.
             name = get_active_preset_name()
             if name and preset_exists(name):
                 preset = load_preset(name)

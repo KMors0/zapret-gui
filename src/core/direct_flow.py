@@ -145,7 +145,13 @@ class DirectFlowCoordinator:
                 f"{self.PRESETS_DOWNLOAD_URL}"
             )
 
-        selected = selection.ensure_selected_preset(engine, "Default.txt")
+        selected = selection.get_selected_preset(engine)
+        if selected is None:
+            default_preset = repo.get_preset(engine, "Default.txt")
+            if default_preset is not None:
+                selected = selection.select_preset(engine, default_preset.manifest.file_name)
+            else:
+                selected = selection.select_preset(engine, presets[0].manifest.file_name)
         if selected is None:
             raise DirectFlowError("Не удалось определить выбранный пресет")
         return selected

@@ -15,6 +15,7 @@ from core.paths import AppPaths
 from .models import PresetDocument, PresetManifest
 
 _PRESET_HEADER_RE = re.compile(r"^\s*#\s*Preset:\s*(.+?)\s*$", re.IGNORECASE | re.MULTILINE)
+_TEMPLATE_ORIGIN_RE = re.compile(r"^\s*#\s*TemplateOrigin:\s*(.+?)\s*$", re.IGNORECASE | re.MULTILINE)
 
 
 def _now_iso() -> str:
@@ -52,29 +53,6 @@ class PresetRepository:
                 return self._load_document(engine, manifest)
         return None
 
-    def find_preset_by_name(self, engine: str, name: str) -> PresetDocument | None:
-        target = str(name or "").strip().lower()
-        if not target:
-            return None
-        matches = [
-            manifest
-            for manifest in self._load_index(engine)
-            if manifest.name.strip().lower() == target
-        ]
-        if not matches:
-            return None
-        matches.sort(key=lambda item: item.file_name.lower())
-        return self._load_document(engine, matches[0])
-
-    def resolve_legacy_id(self, engine: str, legacy_id: str) -> str | None:
-        target = str(legacy_id or "").strip()
-        if not target:
-            return None
-        for manifest in self._load_index(engine):
-            if str(manifest.legacy_id or "").strip() == target:
-                return manifest.file_name
-        return None
-
     def create_preset(
         self,
         engine: str,
@@ -92,9 +70,11 @@ class PresetRepository:
         file_name = self._unique_file_name(engine_paths.presets_dir, normalized_name)
         normalized_kind = str(kind or "user").strip() or "user"
         display_name = self._extract_name(source_text, Path(file_name).stem)
+        template_origin = self._extract_template_origin(source_text)
         manifest = PresetManifest(
             file_name=file_name,
             name=display_name,
+            template_origin=template_origin,
             created_at=created_at,
             updated_at=created_at,
             kind=normalized_kind,
@@ -116,13 +96,14 @@ class PresetRepository:
         idx = self._find_index(manifests, file_name)
         current = manifests[idx]
         next_name = self._extract_name(source_text, Path(current.file_name).stem)
+        next_template_origin = self._extract_template_origin(source_text)
         updated = PresetManifest(
             file_name=current.file_name,
             name=next_name,
+            template_origin=next_template_origin,
             created_at=current.created_at,
             updated_at=_now_iso(),
             kind=current.kind,
-            legacy_id=current.legacy_id,
         )
         manifests[idx] = updated
         self._write_source(self._engine_paths(engine).presets_dir / updated.file_name, source_text)
@@ -150,10 +131,10 @@ class PresetRepository:
         updated = PresetManifest(
             file_name=target_file_name,
             name=self._extract_name(source_text, Path(target_file_name).stem),
+            template_origin=self._extract_template_origin(source_text),
             created_at=current.created_at,
             updated_at=_now_iso(),
             kind=current.kind,
-            legacy_id=current.legacy_id,
         )
         manifests[idx] = updated
         self._save_index(engine, manifests)
@@ -232,19 +213,18 @@ class PresetRepository:
             current = manifests_by_file.get(preset_path.name.lower())
             source_text = _read_text(preset_path)
             display_name = self._extract_name(source_text, preset_path.stem)
+            template_origin = self._extract_template_origin(source_text)
             created_at = current.created_at if current is not None else _now_iso()
             updated_at = current.updated_at if current is not None else created_at
-            kind = current.kind if current is not None else "user"
-            legacy_id = current.legacy_id if current is not None else None
-
+            kind = current.kind if current is not None else self._infer_kind(engine, preset_path.name, template_origin)
             manifests.append(
                 PresetManifest(
                     file_name=preset_path.name,
                     name=display_name,
+                    template_origin=template_origin,
                     created_at=created_at,
                     updated_at=updated_at,
                     kind=kind,
-                    legacy_id=legacy_id,
                 )
             )
 
@@ -258,6 +238,40 @@ class PresetRepository:
             if value:
                 return value
         return str(fallback or "Preset").strip() or "Preset"
+
+    @staticmethod
+    def _extract_template_origin(source_text: str) -> str | None:
+        match = _TEMPLATE_ORIGIN_RE.search(source_text or "")
+        if not match:
+            return None
+        value = str(match.group(1) or "").strip()
+        return value or None
+
+    @staticmethod
+    def _template_canonical_name(engine: str, template_origin: str) -> str | None:
+        value = str(template_origin or "").strip()
+        if not value:
+            return None
+        try:
+            if engine == "winws2":
+                from preset_zapret2.preset_defaults import get_template_canonical_name
+
+                return get_template_canonical_name(value)
+            if engine == "winws1":
+                from preset_zapret1.preset_defaults import get_template_canonical_name_v1
+
+                return get_template_canonical_name_v1(value)
+        except Exception:
+            return None
+        return None
+
+    @classmethod
+    def _infer_kind(cls, engine: str, file_name: str, template_origin: str | None) -> str:
+        origin = str(template_origin or "").strip()
+        canonical = cls._template_canonical_name(engine, origin) if origin else None
+        if canonical and Path(str(file_name or "").strip()).stem.casefold() == canonical.casefold():
+            return "builtin"
+        return "user"
 
     def _load_document(self, engine: str, manifest: PresetManifest) -> PresetDocument:
         path = self._engine_paths(engine).presets_dir / manifest.file_name
@@ -283,14 +297,13 @@ class PresetRepository:
         created_at = str(raw.get("created_at") or _now_iso())
         updated_at = str(raw.get("updated_at") or raw.get("created_at") or created_at)
         kind = str(raw.get("kind") or "user").strip() or "user"
-        legacy_id = str(raw.get("legacy_id") or raw.get("id") or "").strip() or None
         return PresetManifest(
             file_name=file_name,
             name=display_name,
+            template_origin=str(raw.get("template_origin") or "").strip() or None,
             created_at=created_at,
             updated_at=updated_at,
             kind=kind,
-            legacy_id=legacy_id,
         )
 
     @staticmethod

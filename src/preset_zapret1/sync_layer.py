@@ -7,7 +7,13 @@ from typing import Callable, Optional
 from log import log
 
 from .preset_model import CategoryConfigV1, PresetV1
-from .preset_storage import get_active_preset_path_v1, get_preset_path_v1
+from utils.atomic_text import atomic_write_text
+
+
+def _get_selected_source_path_v1():
+    from core.services import get_direct_flow_coordinator
+
+    return get_direct_flow_coordinator().get_selected_source_path("direct_zapret1")
 
 
 class Zapret1PresetSyncLayer:
@@ -28,7 +34,7 @@ class Zapret1PresetSyncLayer:
         from preset_zapret2.txt_preset_parser import CategoryBlock, PresetData, generate_preset_file
         from .preset_model import DEFAULT_PRESET_ICON_COLOR, normalize_preset_icon_color_v1
 
-        active_path = get_active_preset_path_v1()
+        active_path = _get_selected_source_path_v1()
 
         try:
             data = PresetData(
@@ -38,9 +44,17 @@ class Zapret1PresetSyncLayer:
 
             icon_color = normalize_preset_icon_color_v1(getattr(preset, "icon_color", DEFAULT_PRESET_ICON_COLOR))
             preset.icon_color = icon_color
-            data.raw_header = f"""# Preset: {preset.name}
-# Modified: {datetime.now().isoformat()}
-# IconColor: {icon_color}"""
+            template_origin = str(getattr(preset, "_template_origin", "") or "").strip()
+            header_lines = [f"# Preset: {preset.name}"]
+            if template_origin:
+                header_lines.append(f"# TemplateOrigin: {template_origin}")
+            header_lines.extend(
+                [
+                    f"# Modified: {datetime.now().isoformat()}",
+                    f"# IconColor: {icon_color}",
+                ]
+            )
+            data.raw_header = "\n".join(header_lines)
 
             for cat_name, cat in preset.categories.items():
                 from preset_zapret2.base_filter import build_category_base_filter_lines
@@ -138,7 +152,7 @@ class Zapret1PresetSyncLayer:
             return False
 
         cat = (preset.categories or {}).get(category_key)
-        active_path = get_active_preset_path_v1()
+        active_path = _get_selected_source_path_v1()
 
         try:
             if active_path.exists():
@@ -156,10 +170,11 @@ class Zapret1PresetSyncLayer:
 
             if not header_lines:
                 active_name = str(getattr(preset, "name", "") or "Current").strip() or "Current"
-                header_lines = [
-                    f"# Preset: {active_name}",
-                    f"# Modified: {datetime.now().isoformat()}",
-                ]
+                header_lines = [f"# Preset: {active_name}"]
+                template_origin = str(getattr(preset, "_template_origin", "") or "").strip()
+                if template_origin:
+                    header_lines.append(f"# TemplateOrigin: {template_origin}")
+                header_lines.append(f"# Modified: {datetime.now().isoformat()}")
 
             category_filenames = self._category_filter_filenames(category_key)
             if not category_filenames:
@@ -196,10 +211,9 @@ class Zapret1PresetSyncLayer:
         *,
         mirror_selected_source: bool = False,
     ) -> bool:
-        active_path = get_active_preset_path_v1()
+        active_path = _get_selected_source_path_v1()
         try:
-            active_path.parent.mkdir(parents=True, exist_ok=True)
-            active_path.write_text(str(content or ""), encoding="utf-8")
+            atomic_write_text(active_path, str(content or ""), encoding="utf-8")
 
             if mirror_selected_source:
                 active_file_name = str(self._get_selected_file_name() or "").strip()
@@ -210,8 +224,7 @@ class Zapret1PresetSyncLayer:
                         get_app_paths().engine_paths("winws1").ensure_directories().presets_dir / active_file_name
                     )
                     if preset_path.resolve() != active_path.resolve():
-                        preset_path.parent.mkdir(parents=True, exist_ok=True)
-                        preset_path.write_text(str(content or ""), encoding="utf-8")
+                        atomic_write_text(preset_path, str(content or ""), encoding="utf-8")
 
             self._invalidate_cache()
             if self._on_dpi_reload_needed:
@@ -387,7 +400,7 @@ class Zapret1PresetSyncLayer:
         return names
 
     def _active_list_filenames(self) -> set[str]:
-        path = get_active_preset_path_v1()
+        path = _get_selected_source_path_v1()
         if not path.exists():
             return set()
 

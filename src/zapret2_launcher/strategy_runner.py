@@ -23,6 +23,7 @@ from launcher_common.args_filters import apply_all_filters
 from utils.circular_strategy_numbering import (
     strip_strategy_tags,
 )
+from utils.atomic_text import atomic_write_text
 from launcher_common.constants import SW_HIDE, CREATE_NO_WINDOW, STARTF_USESHOWWINDOW
 from dpi.process_health_check import (
     check_process_health,
@@ -512,11 +513,7 @@ class StrategyRunnerV2(StrategyRunnerBase):
 
     @staticmethod
     def _write_text_file(path: str, content: str) -> None:
-        data = (content or "").replace("\r\n", "\n").replace("\r", "\n")
-        if data and not data.endswith("\n"):
-            data += "\n"
-        with open(path, "w", encoding="utf-8", newline="\n") as f:
-            f.write(data)
+        atomic_write_text(path, content, encoding="utf-8")
 
     def _prepare_launch_preset_file(self, source_preset_path: str) -> str:
         """Normalizes the selected source preset in place before direct launch."""

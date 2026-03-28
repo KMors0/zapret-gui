@@ -94,29 +94,6 @@ def get_presets_dir() -> Path:
     return presets_dir
 
 
-def get_active_preset_path() -> Path:
-    """
-    Returns the currently selected source preset path for direct_zapret2.
-
-    This is the only launch file in the new architecture.
-    """
-    try:
-        from core.services import get_app_paths, get_selection_service
-
-        engine = _core_engine_id()
-        engine_paths = get_app_paths().engine_paths(engine)
-        selection = get_selection_service()
-        selected = selection.get_selected_preset(engine)
-        if selected is None:
-            selected = selection.ensure_selected_preset(engine, "Default.txt")
-        if selected is not None:
-            return engine_paths.presets_dir / selected.manifest.file_name
-    except Exception:
-        pass
-
-    return Path(_get_presets_root_path()) / "Default.txt"
-
-
 def get_user_settings_path() -> Path:
     """
     Returns path to user settings file.
@@ -178,6 +155,10 @@ def _load_preset_from_path(preset_path: Path, fallback_name: str) -> Optional[Pr
 
         # Parse metadata from raw_header
         preset.created, preset.modified, preset.description, preset.icon_color = _parse_metadata_from_header(data.raw_header)
+        try:
+            setattr(preset, "_template_origin", _parse_template_origin_from_header(data.raw_header))
+        except Exception:
+            pass
 
         # Convert category blocks to CategoryConfig
         # Also track full block args (filter-stripped but syndata/send-inclusive) for inference.
@@ -373,6 +354,18 @@ def _parse_builtin_version_from_header(header: str) -> Optional[str]:
     return None
 
 
+def _parse_template_origin_from_header(header: str) -> Optional[str]:
+    for line in (header or "").split('\n'):
+        stripped = line.strip()
+        if stripped and not stripped.startswith("#"):
+            break
+        match = re.match(r'#\s*TemplateOrigin:\s*(.+)', line, re.IGNORECASE)
+        if match:
+            value = match.group(1).strip()
+            return value or None
+    return None
+
+
 def _read_existing_builtin_version(path: Path) -> Optional[str]:
     """Reads BuiltinVersion from existing preset file (if present)."""
     try:
@@ -380,6 +373,16 @@ def _read_existing_builtin_version(path: Path) -> Optional[str]:
             return None
         content = path.read_text(encoding="utf-8", errors="replace")
         return _parse_builtin_version_from_header(content)
+    except Exception:
+        return None
+
+
+def _read_existing_template_origin(path: Path) -> Optional[str]:
+    try:
+        if not path.exists():
+            return None
+        content = path.read_text(encoding="utf-8", errors="replace")
+        return _parse_template_origin_from_header(content)
     except Exception:
         return None
 
@@ -426,7 +429,10 @@ def save_preset(preset: Preset) -> bool:
         # Build raw header. Preserve BuiltinVersion if this file already has it
         # so versioned auto-updates can compare against local state correctly.
         builtin_version = _read_existing_builtin_version(preset_path)
+        template_origin = str(getattr(preset, "_template_origin", "") or "").strip() or _read_existing_template_origin(preset_path)
         header_lines = [f"# Preset: {preset.name}"]
+        if template_origin:
+            header_lines.append(f"# TemplateOrigin: {template_origin}")
         if builtin_version:
             header_lines.append(f"# BuiltinVersion: {builtin_version}")
         header_lines.extend(

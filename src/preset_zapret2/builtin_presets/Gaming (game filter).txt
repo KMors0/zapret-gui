@@ -1,5 +1,6 @@
 # Preset: Gaming (game filter)
-# BuiltinVersion: 2.14
+# TemplateOrigin: Gaming (game filter)
+# BuiltinVersion: 2.15
 # IconColor: #f07575ff
 
 --lua-init=@lua/zapret-lib.lua

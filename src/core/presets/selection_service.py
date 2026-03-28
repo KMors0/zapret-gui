@@ -22,16 +22,7 @@ class PresetSelectionService:
             payload = json.loads(path.read_text(encoding="utf-8"))
         except Exception:
             return None
-        value = str(payload.get("selected_file_name") or "").strip()
-        if value:
-            return value
-        legacy_id = str(payload.get("selected_preset_id") or "").strip()
-        if legacy_id:
-            return self._repository.resolve_legacy_id(engine, legacy_id)
-        return None
-
-    def get_selected_preset_id(self, engine: str) -> str | None:
-        return self.get_selected_file_name(engine)
+        return str(payload.get("selected_file_name") or "").strip() or None
 
     def get_selected_preset(self, engine: str) -> PresetDocument | None:
         file_name = self.get_selected_file_name(engine)
@@ -62,7 +53,7 @@ class PresetSelectionService:
         if selected_file_name and selected_file_name.strip().lower() == str(file_name or "").strip().lower():
             raise ValueError("Cannot delete the selected preset")
 
-    def ensure_selected_preset(self, engine: str, preferred_file_name: str | None = "Default.txt") -> PresetDocument | None:
+    def ensure_selected_preset(self, engine: str, preferred_file_name: str | None = None) -> PresetDocument | None:
         current = self.get_selected_preset(engine)
         if current is not None:
             return current

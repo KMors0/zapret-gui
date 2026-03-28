@@ -40,6 +40,7 @@ def _rewrite_preset_headers(
     source_text: str,
     target_name: str,
     *,
+    template_origin: str | None = None,
     created: str | None = None,
     modified: str | None = None,
 ) -> str:
@@ -59,6 +60,7 @@ def _rewrite_preset_headers(
     body = lines[header_end:]
     out_header: list[str] = []
     saw_preset = False
+    saw_template_origin = False
     saw_created = False
     saw_modified = False
 
@@ -68,6 +70,14 @@ def _rewrite_preset_headers(
         if lowered.startswith("# preset:"):
             out_header.append(f"# Preset: {target_name}")
             saw_preset = True
+            continue
+        if lowered.startswith("# templateorigin:"):
+            if template_origin is not None:
+                out_header.append(f"# TemplateOrigin: {template_origin}")
+                saw_template_origin = True
+            else:
+                out_header.append(raw.rstrip("\n"))
+                saw_template_origin = True
             continue
         if lowered.startswith("# created:"):
             if created is not None:
@@ -93,6 +103,10 @@ def _rewrite_preset_headers(
         out_header.insert(0, f"# Preset: {target_name}")
 
     insert_idx = 1 if out_header and out_header[0].startswith("# Preset:") else 0
+    if template_origin is not None and not saw_template_origin:
+        out_header.insert(insert_idx, f"# TemplateOrigin: {template_origin}")
+        insert_idx += 1
+
     if created is not None and not saw_created:
         out_header.insert(insert_idx, f"# Created: {created}")
         insert_idx += 1
@@ -498,72 +512,24 @@ class DirectPresetFacade:
     def list_presets(self) -> list[PresetDocument]:
         return get_preset_repository().list_presets(self.engine)
 
-    def list_names(self) -> list[str]:
-        return [item.manifest.name for item in self.list_presets()]
-
     def list_file_names(self) -> list[str]:
         return [item.manifest.file_name for item in self.list_presets()]
-
-    def exists(self, name: str) -> bool:
-        return bool(self.get_documents_by_name(name))
 
     def exists_file_name(self, file_name: str) -> bool:
         return self.get_document_by_file_name(file_name) is not None
 
-    def get_selected_name(self) -> str:
-        preset = get_selection_service().ensure_selected_preset(self.engine, "Default.txt")
-        return preset.manifest.name if preset is not None else ""
-
     def get_selected_file_name(self) -> str:
-        preset = get_selection_service().ensure_selected_preset(self.engine, "Default.txt")
+        preset = self.get_selected_document()
         return preset.manifest.file_name if preset is not None else ""
 
     def get_selected_document(self) -> PresetDocument | None:
         return get_direct_flow_coordinator().get_selected_source_preset(self.launch_method)
 
-    def is_selected(self, name: str) -> bool:
-        return (self.get_selected_name() or "").strip().lower() == str(name or "").strip().lower()
-
     def is_selected_file_name(self, file_name: str) -> bool:
         return (self.get_selected_file_name() or "").strip().lower() == str(file_name or "").strip().lower()
 
-    def get_documents_by_name(self, name: str) -> list[PresetDocument]:
-        target = str(name or "").strip().lower()
-        if not target:
-            return []
-        matches = [
-            item for item in self.list_presets()
-            if str(item.manifest.name or "").strip().lower() == target
-        ]
-        matches.sort(key=lambda item: item.manifest.file_name.lower())
-        return matches
-
-    def get_document(self, name: str) -> PresetDocument | None:
-        matches = self.get_documents_by_name(name)
-        if not matches:
-            return None
-        if len(matches) > 1:
-            raise ValueError(f"Multiple presets share the same display name: {name}")
-        return matches[0]
-
     def get_document_by_file_name(self, file_name: str) -> PresetDocument | None:
         return get_preset_repository().get_preset(self.engine, file_name)
-
-    def get_preset_origin(self, name: str) -> str:
-        try:
-            document = self.get_document(name)
-        except ValueError:
-            document = None
-        if document is not None:
-            kind = str(document.manifest.kind or "").strip().lower()
-            if kind in {"builtin", "imported", "user"}:
-                if kind == "builtin":
-                    return "builtin"
-                if kind == "imported":
-                    return "imported"
-                return "user"
-
-        return "user"
 
     def _hierarchy_scope_key(self) -> str:
         if self.launch_method == "direct_zapret2":
@@ -619,43 +585,11 @@ class DirectPresetFacade:
         except Exception:
             pass
 
-    def is_builtin_name(self, name: str) -> bool:
-        candidate = str(name or "").strip()
-        if not candidate:
-            return False
-
-        try:
-            document = self.get_document(candidate)
-        except ValueError:
-            document = None
-        if document is not None:
-            kind = str(document.manifest.kind or "").strip().lower()
-            if kind == "builtin":
-                return True
-
-        return False
-
-    def get_source_path(self, name: str) -> Path:
-        document = self.get_document(name)
-        if document is None:
-            raise ValueError(f"Preset not found: {name}")
-        return get_app_paths().engine_paths(self.engine).ensure_directories().presets_dir / document.manifest.file_name
-
     def get_source_path_by_file_name(self, file_name: str) -> Path:
         document = self.get_document_by_file_name(file_name)
         if document is None:
             raise ValueError(f"Preset not found: {file_name}")
         return get_app_paths().engine_paths(self.engine).ensure_directories().presets_dir / document.manifest.file_name
-
-    def save_source_text(self, name: str, source_text: str) -> PresetDocument:
-        document = self.get_document(name)
-        if document is None:
-            raise ValueError(f"Preset not found: {name}")
-        normalized = _drop_active_preset_headers(source_text)
-        updated = get_preset_repository().update_preset(self.engine, document.manifest.file_name, normalized, None)
-        if self.is_selected_file_name(updated.manifest.file_name):
-            get_direct_flow_coordinator().refresh_selected_runtime(self.launch_method)
-        return updated
 
     def save_source_text_by_file_name(self, file_name: str, source_text: str) -> PresetDocument:
         document = self.get_document_by_file_name(file_name)
@@ -785,38 +719,11 @@ class DirectPresetFacade:
     def select_file_name(self, file_name: str):
         return get_direct_flow_coordinator().select_preset_file_name(self.launch_method, file_name)
 
-    def rename(self, old_name: str, new_name: str) -> PresetDocument:
-        document = self.get_document(old_name)
-        if document is None:
-            raise ValueError(f"Preset not found: {old_name}")
-        if self.is_builtin_name(old_name):
-            raise ValueError(f"Built-in preset cannot be renamed: {old_name}")
-        was_selected = self.is_selected_file_name(document.manifest.file_name)
-
-        renamed = get_preset_repository().rename_preset(self.engine, document.manifest.file_name, new_name)
-        rewritten = _rewrite_preset_headers(
-            document.source_text,
-            new_name,
-            modified=datetime.now().isoformat(),
-        )
-        updated = get_preset_repository().update_preset(self.engine, renamed.manifest.file_name, rewritten, None)
-        self._rename_library_meta(
-            document.manifest.file_name,
-            updated.manifest.file_name,
-            old_display_name=document.manifest.name,
-            new_display_name=updated.manifest.name,
-        )
-
-        if was_selected:
-            get_selection_service().select_preset(self.engine, updated.manifest.file_name)
-            get_direct_flow_coordinator().refresh_selected_runtime(self.launch_method)
-        return updated
-
     def rename_by_file_name(self, file_name: str, new_name: str) -> PresetDocument:
         document = self.get_document_by_file_name(file_name)
         if document is None:
             raise ValueError(f"Preset not found: {file_name}")
-        if self.is_builtin_name(document.manifest.name):
+        if str(document.manifest.kind or "").strip().lower() == "builtin":
             raise ValueError(f"Built-in preset cannot be renamed: {document.manifest.name}")
         was_selected = self.is_selected_file_name(document.manifest.file_name)
 
@@ -824,6 +731,7 @@ class DirectPresetFacade:
         rewritten = _rewrite_preset_headers(
             document.source_text,
             new_name,
+            template_origin=document.manifest.template_origin,
             modified=datetime.now().isoformat(),
         )
         updated = get_preset_repository().update_preset(self.engine, renamed.manifest.file_name, rewritten, None)
@@ -838,26 +746,6 @@ class DirectPresetFacade:
             get_selection_service().select_preset(self.engine, updated.manifest.file_name)
             get_direct_flow_coordinator().refresh_selected_runtime(self.launch_method)
         return updated
-
-    def duplicate(self, name: str, new_name: str) -> PresetDocument:
-        document = self.get_document(name)
-        if document is None:
-            raise ValueError(f"Preset not found: {name}")
-        now = datetime.now().isoformat()
-        rewritten = _rewrite_preset_headers(
-            document.source_text,
-            new_name,
-            created=now,
-            modified=now,
-        )
-        duplicated = get_preset_repository().create_preset(self.engine, new_name, rewritten)
-        self._copy_library_meta(
-            document.manifest.file_name,
-            duplicated.manifest.file_name,
-            source_display_name=document.manifest.name,
-            new_display_name=duplicated.manifest.name,
-        )
-        return duplicated
 
     def duplicate_by_file_name(self, file_name: str, new_name: str) -> PresetDocument:
         document = self.get_document_by_file_name(file_name)
@@ -867,6 +755,7 @@ class DirectPresetFacade:
         rewritten = _rewrite_preset_headers(
             document.source_text,
             new_name,
+            template_origin=document.manifest.template_origin,
             created=now,
             modified=now,
         )
@@ -900,13 +789,6 @@ class DirectPresetFacade:
         if not src.exists():
             raise ValueError(f"Import source not found: {src}")
         target_name = str(name or src.stem or "Imported").strip() or "Imported"
-        if self.is_builtin_name(target_name):
-            base_name = f"{target_name} (импорт)"
-            target_name = base_name
-            counter = 2
-            while self.exists(target_name) or self.is_builtin_name(target_name):
-                target_name = f"{base_name} {counter}"
-                counter += 1
         source_text = src.read_text(encoding="utf-8", errors="replace")
         rewritten = _rewrite_preset_headers(source_text, target_name)
         imported = get_preset_repository().create_preset(
@@ -917,18 +799,6 @@ class DirectPresetFacade:
         )
         self._delete_library_meta(imported.manifest.file_name, display_name=imported.manifest.name)
         return imported
-
-    def export_plain_text(self, name: str, dest_path: Path) -> Path:
-        document = self.get_document(name)
-        if document is None:
-            raise ValueError(f"Preset not found: {name}")
-        dest = Path(dest_path)
-        dest.parent.mkdir(parents=True, exist_ok=True)
-        text = document.source_text or ""
-        if not text.endswith("\n"):
-            text += "\n"
-        dest.write_text(text, encoding="utf-8")
-        return dest
 
     def export_plain_text_by_file_name(self, file_name: str, dest_path: Path) -> Path:
         document = self.get_document_by_file_name(file_name)
@@ -942,27 +812,19 @@ class DirectPresetFacade:
         dest.write_text(text, encoding="utf-8")
         return dest
 
-    def reset_to_template(self, name: str) -> PresetDocument:
-        document = self.get_document(name)
-        if document is None:
-            raise ValueError(f"Preset not found: {name}")
-        template_content = _resolve_reset_template(self.launch_method, name)
-        if not template_content:
-            raise ValueError("Template content not found")
-        rewritten = _rewrite_preset_headers(template_content, name)
-        updated = get_preset_repository().update_preset(self.engine, document.manifest.file_name, rewritten, None)
-        if self.is_selected_file_name(document.manifest.file_name):
-            self._refresh_selected_runtime_from_source()
-        return updated
-
     def reset_to_template_by_file_name(self, file_name: str) -> PresetDocument:
         document = self.get_document_by_file_name(file_name)
         if document is None:
             raise ValueError(f"Preset not found: {file_name}")
-        template_content = _resolve_reset_template(self.launch_method, document.manifest.name)
+        template_key = str(document.manifest.template_origin or document.manifest.name or "").strip()
+        template_content = _resolve_reset_template(self.launch_method, template_key)
         if not template_content:
             raise ValueError("Template content not found")
-        rewritten = _rewrite_preset_headers(template_content, document.manifest.name)
+        rewritten = _rewrite_preset_headers(
+            template_content,
+            document.manifest.name,
+            template_origin=str(document.manifest.template_origin or "").strip() or None,
+        )
         updated = get_preset_repository().update_preset(self.engine, document.manifest.file_name, rewritten, None)
         if self.is_selected_file_name(document.manifest.file_name):
             self._refresh_selected_runtime_from_source()
@@ -999,21 +861,11 @@ class DirectPresetFacade:
         if selected_file_name and self.get_document_by_file_name(selected_file_name) is not None:
             self._refresh_selected_runtime_from_source()
 
-    def delete(self, name: str) -> None:
-        document = self.get_document(name)
-        if document is None:
-            raise ValueError(f"Preset not found: {name}")
-        if self.is_builtin_name(name):
-            raise ValueError(f"Built-in preset cannot be deleted: {name}")
-        get_selection_service().ensure_can_delete(self.engine, document.manifest.file_name)
-        get_preset_repository().delete_preset(self.engine, document.manifest.file_name)
-        self._delete_library_meta(document.manifest.file_name, display_name=document.manifest.name)
-
     def delete_by_file_name(self, file_name: str) -> None:
         document = self.get_document_by_file_name(file_name)
         if document is None:
             raise ValueError(f"Preset not found: {file_name}")
-        if self.is_builtin_name(document.manifest.name):
+        if str(document.manifest.kind or "").strip().lower() == "builtin":
             raise ValueError(f"Built-in preset cannot be deleted: {document.manifest.name}")
         get_selection_service().ensure_can_delete(self.engine, document.manifest.file_name)
         get_preset_repository().delete_preset(self.engine, document.manifest.file_name)
@@ -1205,7 +1057,12 @@ class DirectPresetFacade:
             default_filter_mode = get_category_default_filter_mode(normalized_key)
             default_settings = get_default_category_settings().get(normalized_key) or {}
 
-            active_preset_name = (self.get_selected_name() or getattr(preset, "name", "") or "").strip()
+            selected_document = self.get_selected_document()
+            active_preset_name = (
+                str(selected_document.manifest.name or "").strip()
+                if selected_document is not None
+                else str(getattr(preset, "name", "") or "").strip()
+            )
             try:
                 try:
                     invalidate_templates_cache()
@@ -1501,7 +1358,7 @@ class DirectPresetFacade:
 
         layer = Zapret1PresetSyncLayer(
             on_dpi_reload_needed=self.on_dpi_reload_needed,
-            get_selected_name=self.get_selected_name,
+            get_selected_file_name=self.get_selected_file_name,
         )
         return bool(layer.sync_preset(preset))
 
@@ -1512,6 +1369,6 @@ class DirectPresetFacade:
 
         layer = Zapret1PresetSyncLayer(
             on_dpi_reload_needed=self.on_dpi_reload_needed,
-            get_selected_name=self.get_selected_name,
+            get_selected_file_name=self.get_selected_file_name,
         )
         return bool(layer.sync_category_preserving_layout(preset, category_key))

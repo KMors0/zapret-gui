@@ -1472,20 +1472,16 @@ class MainWindowUI:
         page = self._ensure_page(PageName.ZAPRET2_PRESET_DETAIL)
         if page is None:
             return
-        if hasattr(page, "set_preset_file_name") and str(preset_name or "").strip().lower().endswith(".txt"):
+        if hasattr(page, "set_preset_file_name"):
             page.set_preset_file_name(preset_name)
-        elif hasattr(page, "set_preset_name"):
-            page.set_preset_name(preset_name)
         self.show_page(PageName.ZAPRET2_PRESET_DETAIL)
 
     def _open_zapret1_preset_detail(self, preset_name: str) -> None:
         page = self._ensure_page(PageName.ZAPRET1_PRESET_DETAIL)
         if page is None:
             return
-        if hasattr(page, "set_preset_file_name") and str(preset_name or "").strip().lower().endswith(".txt"):
+        if hasattr(page, "set_preset_file_name"):
             page.set_preset_file_name(preset_name)
-        elif hasattr(page, "set_preset_name"):
-            page.set_preset_name(preset_name)
         self.show_page(PageName.ZAPRET1_PRESET_DETAIL)
 
     def _open_zapret2_preset_folders(self) -> None:
@@ -1948,9 +1944,9 @@ class MainWindowUI:
             except Exception:
                 pass
 
-    def _on_preset_switched(self, preset_name: str):
+    def _on_preset_switched(self, preset_file_name: str):
         from log import log
-        log(f"Пресет переключен: {preset_name}", "INFO")
+        log(f"Пресет переключен: {preset_file_name}", "INFO")
 
         try:
             from strategy_menu import get_strategy_launch_method

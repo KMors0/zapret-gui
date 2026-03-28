@@ -17,20 +17,6 @@ class Zapret2PresetDetailPage(PresetSubpageBase):
             pass
         return "Пресет Zapret 2"
 
-    def _create_manager(self):
-        try:
-            from strategy_menu import get_strategy_launch_method
-
-            if (get_strategy_launch_method() or "").strip().lower() == "direct_zapret2_orchestra":
-                from preset_orchestra_zapret2 import PresetManager
-                return PresetManager()
-        except Exception:
-            pass
-
-        from core.presets.direct_facade import DirectPresetFacade
-
-        return DirectPresetFacade.from_launch_method("direct_zapret2")
-
     def _get_preset_path(self, name: str) -> Path:
         try:
             from strategy_menu import get_strategy_launch_method

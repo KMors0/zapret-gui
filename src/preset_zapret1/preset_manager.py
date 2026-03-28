@@ -9,6 +9,7 @@ from typing import Callable, List, Optional
 
 from log import log
 from core.services import get_app_paths
+from utils.atomic_text import atomic_write_text
 
 from .preset_model import (
     CategoryConfigV1,
@@ -302,7 +303,7 @@ class PresetManagerV1:
             return False
 
         try:
-            document = self._get_facade().get_document(name)
+            document = self._get_facade().get_document_by_file_name(name)
             if document is None:
                 log(f"Cannot reset V1: preset '{name}' not found", "ERROR")
                 return False
@@ -314,9 +315,10 @@ class PresetManagerV1:
                 except Exception:
                     pass
 
-            template_content = get_template_content_v1(name)
+            template_key = str(document.manifest.template_origin or document.manifest.name or name).strip()
+            template_content = get_template_content_v1(template_key)
             if not template_content:
-                base = get_builtin_base_from_copy_name_v1(name)
+                base = get_builtin_base_from_copy_name_v1(template_key)
                 if base:
                     template_content = get_template_content_v1(base)
             if not template_content:
@@ -335,8 +337,7 @@ class PresetManagerV1:
 
             preset_path = get_app_paths().engine_paths("winws1").ensure_directories().presets_dir / target_file_name
             try:
-                preset_path.parent.mkdir(parents=True, exist_ok=True)
-                preset_path.write_text(rendered_content, encoding="utf-8")
+                atomic_write_text(preset_path, rendered_content, encoding="utf-8")
             except PermissionError as e:
                 log(f"Cannot write V1 preset file (locked?): {e}", "ERROR")
                 raise
@@ -361,7 +362,7 @@ class PresetManagerV1:
 
             if do_sync:
                 try:
-                    document = self._get_facade().get_document(name)
+                    document = self._get_facade().get_document_by_file_name(name)
                     preset = self._get_store().get_preset_by_file_name(document.manifest.file_name) if document is not None else None
                     if preset is None:
                         log(f"Cannot sync reset V1 preset '{name}': failed to reload source preset", "ERROR")
@@ -435,7 +436,7 @@ class PresetManagerV1:
             original_active_file_name = (self.get_active_preset_file_name() or "").strip()
             active_file_name = original_active_file_name if original_active_file_name in file_names else ""
             if not active_file_name:
-                active_file_name = "Default.txt" if "Default.txt" in file_names else file_names[0]
+                active_file_name = file_names[0]
 
             if active_file_name:
                 try:

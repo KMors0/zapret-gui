@@ -11,7 +11,6 @@ from .preset_model import CategoryConfigV1, PresetV1, validate_preset_v1
 from .preset_manager import PresetManagerV1
 from .preset_storage import (
     get_presets_dir_v1,
-    get_active_preset_path_v1,
     save_preset_v1,
 )
 from .preset_store import PresetStoreV1, get_preset_store_v1
@@ -44,7 +43,6 @@ __all__ = [
     "validate_preset_v1",
     "PresetManagerV1",
     "get_presets_dir_v1",
-    "get_active_preset_path_v1",
     "save_preset_v1",
     "PresetStoreV1",
     "get_preset_store_v1",

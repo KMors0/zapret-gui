@@ -105,12 +105,17 @@ def _normalize_template_header(content: str, preset_name: str) -> str:
 
     out_header: list[str] = []
     saw_preset = False
+    saw_template_origin = False
     for raw in header:
         stripped = raw.strip()
         low = stripped.lower()
         if low.startswith("# preset:"):
             out_header.append(f"# Preset: {name}")
             saw_preset = True
+            continue
+        if low.startswith("# templateorigin:"):
+            out_header.append(f"# TemplateOrigin: {name}")
+            saw_template_origin = True
             continue
         if low.startswith("# builtinversion:"):
             out_header.append(raw.rstrip("\n"))
@@ -124,6 +129,9 @@ def _normalize_template_header(content: str, preset_name: str) -> str:
 
     if not saw_preset:
         out_header.insert(0, f"# Preset: {name}")
+    if not saw_template_origin:
+        insert_idx = 1 if out_header and out_header[0].startswith("# Preset:") else 0
+        out_header.insert(insert_idx, f"# TemplateOrigin: {name}")
 
     return "\n".join(out_header + body).rstrip("\n") + "\n"
 

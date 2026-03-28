@@ -282,7 +282,6 @@ class Zapret2DirectControlPage(BasePage):
         preset_col = QVBoxLayout()
         preset_col.setSpacing(2)
         self.preset_name_label = StrongBodyLabel(tr_catalog("page.z2_control.preset.not_selected", language=self._ui_language, default="Не выбран"))
-        self.active_preset_label = self.preset_name_label  # backward-compat alias
         if _HAS_FLUENT_LABELS:
             self.strategy_label = CaptionLabel(tr_catalog("page.z2_control.preset.no_active_lists", language=self._ui_language, default="Нет активных листов"))
         else:
@@ -349,12 +348,6 @@ class Zapret2DirectControlPage(BasePage):
         self.add_widget(direct_card)
 
         self.add_spacing(8)
-
-        # Backward-compat hidden attributes
-        self.active_preset_desc = CaptionLabel("")
-        self.active_preset_desc.setVisible(False)
-        self.strategy_desc = CaptionLabel("")
-        self.strategy_desc.setVisible(False)
 
         self.add_spacing(16)
 

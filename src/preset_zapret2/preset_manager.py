@@ -9,6 +9,7 @@ from typing import Callable, List, Optional
 
 from log import log
 from core.services import get_app_paths
+from utils.atomic_text import atomic_write_text
 
 from .preset_model import (
     CategoryConfig,
@@ -581,7 +582,10 @@ class PresetManager:
 
         # Prefer defaults from the selected preset's matching template.
         selected_preset = self.get_selected_source_preset()
-        active_preset_name = (getattr(selected_preset, "name", "") or preset.name or "").strip()
+        active_preset_name = (
+            str(getattr(selected_preset, "_template_origin", "") or "").strip()
+            or str(getattr(selected_preset, "name", "") or preset.name or "").strip()
+        )
         category_key_l = str(category_key or "").strip().lower()
         try:
             try:
@@ -869,7 +873,7 @@ class PresetManager:
             original_active_file_name = (self.get_selected_source_preset_file_name() or "").strip()
             active_file_name = original_active_file_name if original_active_file_name in file_names else ""
             if not active_file_name:
-                active_file_name = "Default.txt" if "Default.txt" in file_names else file_names[0]
+                active_file_name = file_names[0]
 
             if active_file_name:
                 try:
@@ -941,11 +945,16 @@ class PresetManager:
 
             out_header: list[str] = []
             saw_preset = False
+            saw_template_origin = False
             for raw in header:
                 stripped = raw.strip().lower()
                 if stripped.startswith("# preset:"):
                     out_header.append(f"# Preset: {target_name}")
                     saw_preset = True
+                    continue
+                if stripped.startswith("# templateorigin:"):
+                    out_header.append(raw.rstrip("\n"))
+                    saw_template_origin = True
                     continue
                 if stripped.startswith("# builtinversion:"):
                     out_header.append(raw.rstrip("\n"))
@@ -959,11 +968,14 @@ class PresetManager:
 
             if not saw_preset:
                 out_header.insert(0, f"# Preset: {target_name}")
+            if not saw_template_origin and document.manifest.template_origin:
+                insert_idx = 1 if out_header and out_header[0].startswith("# Preset:") else 0
+                out_header.insert(insert_idx, f"# TemplateOrigin: {document.manifest.template_origin}")
 
             return "\n".join(out_header + body).rstrip("\n") + "\n"
 
         try:
-            document = self._get_facade().get_document(name)
+            document = self._get_facade().get_document_by_file_name(name)
             if document is None:
                 log(f"Cannot reset: preset '{name}' not found", "ERROR")
                 return False
@@ -976,10 +988,11 @@ class PresetManager:
                     pass
 
             # Try matching template first, then fall back to default
-            template_content = get_template_content(name)
+            template_key = str(document.manifest.template_origin or document.manifest.name or name).strip()
+            template_content = get_template_content(template_key)
             if not template_content:
                 # Try base name for duplicates (e.g. "Default (копия 2)" -> "Default")
-                base = get_builtin_base_from_copy_name(name)
+                base = get_builtin_base_from_copy_name(template_key)
                 if base:
                     template_content = get_template_content(base)
             if not template_content:
@@ -996,8 +1009,7 @@ class PresetManager:
             # Persist exact template reset into the preset file (force, regardless of version).
             preset_path = get_app_paths().engine_paths("winws2").ensure_directories().presets_dir / target_file_name
             try:
-                preset_path.parent.mkdir(parents=True, exist_ok=True)
-                preset_path.write_text(rendered_content, encoding="utf-8")
+                atomic_write_text(preset_path, rendered_content, encoding="utf-8")
             except PermissionError as e:
                 log(f"Cannot write preset file (locked by winws2?): {e}", "ERROR")
                 raise
@@ -1024,7 +1036,7 @@ class PresetManager:
             # Refresh launch-ready source preset state through the regular save path.
             if do_sync:
                 try:
-                    document = self._get_facade().get_document(name)
+                    document = self._get_facade().get_document_by_file_name(name)
                     preset = self._get_store().get_preset_by_file_name(document.manifest.file_name) if document is not None else None
                     if preset is None:
                         log(f"Cannot sync reset preset '{name}': failed to reload source preset", "ERROR")

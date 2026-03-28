@@ -154,18 +154,7 @@ class StrategyRunnerBase(ABC):
             return False
 
         try:
-            # Read preset file and parse arguments
-            with open(preset_path, 'r', encoding='utf-8') as f:
-                lines = f.readlines()
-
-            args = []
-            for line in lines:
-                line = line.strip()
-                # Skip empty lines and comments
-                if not line or line.startswith('#'):
-                    continue
-                args.append(line)
-
+            args = self._read_preset_file_args(preset_path)
             if not args:
                 log(f"Preset file is empty or has no valid arguments: {preset_path}", "ERROR")
                 return False
@@ -176,6 +165,18 @@ class StrategyRunnerBase(ABC):
         except Exception as e:
             log(f"Error reading preset file: {e}", "ERROR")
             return False
+
+    def _read_preset_file_args(self, preset_path: str) -> List[str]:
+        with open(preset_path, 'r', encoding='utf-8') as f:
+            lines = f.readlines()
+
+        args = []
+        for line in lines:
+            line = line.strip()
+            if not line or line.startswith('#'):
+                continue
+            args.append(line)
+        return args
 
     def _write_preset_file(self, args: List[str], strategy_name: str) -> str:
         """

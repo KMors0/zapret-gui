@@ -78,24 +78,6 @@ def get_presets_dir_v1() -> Path:
     return presets_dir
 
 
-def get_active_preset_path_v1() -> Path:
-    try:
-        from core.services import get_app_paths, get_selection_service
-
-        engine = _core_engine_id()
-        engine_paths = get_app_paths().engine_paths(engine)
-        selection = get_selection_service()
-        selected = selection.get_selected_preset(engine)
-        if selected is None:
-            selected = selection.ensure_selected_preset(engine, "Default.txt")
-        if selected is not None:
-            return engine_paths.presets_dir / selected.manifest.file_name
-    except Exception:
-        pass
-
-    return Path(_get_presets_root_path()) / "Default.txt"
-
-
 def _sanitize_filename(name: str) -> str:
     dangerous = ['/', '\\', ':', '*', '?', '"', '<', '>', '|', '\0']
     safe_name = name
@@ -127,6 +109,18 @@ def _parse_metadata_from_header_v1(header: str) -> Tuple[str, str, str, str]:
     return created, modified, description, icon_color
 
 
+def _parse_template_origin_from_header_v1(header: str) -> Optional[str]:
+    for line in (header or "").split('\n'):
+        stripped = line.strip()
+        if stripped and not stripped.startswith("#"):
+            break
+        match = re.match(r'#\s*TemplateOrigin:\s*(.+)', line, re.IGNORECASE)
+        if match:
+            value = match.group(1).strip()
+            return value or None
+    return None
+
+
 def _load_preset_from_path_v1(preset_path: Path, fallback_name: str) -> Optional["PresetV1"]:
     from .preset_model import PresetV1, CategoryConfigV1
     from preset_zapret2.txt_preset_parser import parse_preset_file
@@ -143,6 +137,10 @@ def _load_preset_from_path_v1(preset_path: Path, fallback_name: str) -> Optional
         )
         preset.created, preset.modified, preset.description, preset.icon_color = \
             _parse_metadata_from_header_v1(data.raw_header)
+        try:
+            setattr(preset, "_template_origin", _parse_template_origin_from_header_v1(data.raw_header))
+        except Exception:
+            pass
 
         for block in data.categories:
             cat_name = block.category
@@ -217,16 +215,23 @@ def save_preset_v1(preset: "PresetV1") -> bool:
         # Preserve BuiltinVersion if the preset file already carries one
         # (so version-based auto-updates can still compare on next startup).
         existing_builtin_version: Optional[str] = None
+        existing_template_origin: Optional[str] = None
         if preset_path.exists():
             try:
                 from preset_zapret2.preset_defaults import _extract_builtin_version
                 existing_builtin_version = _extract_builtin_version(
                     preset_path.read_text(encoding="utf-8", errors="replace")
                 )
+                existing_template_origin = _parse_template_origin_from_header_v1(
+                    preset_path.read_text(encoding="utf-8", errors="replace")
+                )
             except Exception:
                 pass
 
         header_lines = [f"# Preset: {preset.name}"]
+        template_origin = str(getattr(preset, "_template_origin", "") or "").strip() or existing_template_origin
+        if template_origin:
+            header_lines.append(f"# TemplateOrigin: {template_origin}")
         if existing_builtin_version:
             header_lines.append(f"# BuiltinVersion: {existing_builtin_version}")
         header_lines.extend([

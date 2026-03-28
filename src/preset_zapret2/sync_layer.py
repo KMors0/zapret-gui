@@ -8,7 +8,13 @@ from log import log
 
 from .ports import subtract_port_specs, union_port_specs
 from .preset_model import DEFAULT_PRESET_ICON_COLOR, Preset, normalize_preset_icon_color
-from .preset_storage import get_active_preset_path
+from utils.atomic_text import atomic_write_text
+
+
+def _get_selected_source_path() -> str:
+    from core.services import get_direct_flow_coordinator
+
+    return str(get_direct_flow_coordinator().get_selected_source_path("direct_zapret2"))
 
 
 def _strip_debug_from_base_args(base_args: str) -> str:
@@ -44,7 +50,6 @@ def inject_debug_into_base_args(base_args: str) -> str:
 def update_wf_out_ports_in_base_args(preset: Preset) -> str:
     """Normalize wf out-port args from enabled category filters."""
     from .base_filter import build_category_base_filter_lines
-    from .preset_defaults import get_builtin_preset_content
 
     base_args = preset.base_args or ""
     lines = base_args.splitlines()
@@ -74,31 +79,6 @@ def update_wf_out_ports_in_base_args(preset: Preset) -> str:
                     prev_extra_tcp = v.strip()
                 elif k_l == "udp":
                     prev_extra_udp = v.strip()
-
-    if not marker_present and (preset.name or "").strip().lower() == "default":
-        try:
-            template_tcp = ""
-            template_udp = ""
-            template = get_builtin_preset_content("Default") or ""
-            for raw in template.splitlines():
-                line = raw.strip()
-                if line.startswith("--wf-tcp-out="):
-                    template_tcp = line.split("=", 1)[1].strip()
-                    if template_udp:
-                        break
-                elif line.startswith("--wf-udp-out="):
-                    template_udp = line.split("=", 1)[1].strip()
-                    if template_tcp:
-                        break
-
-            if template_tcp:
-                existing_wf_tcp = template_tcp
-            if template_udp:
-                existing_wf_udp = template_udp
-            if template_tcp or template_udp:
-                keep_empty_marker = True
-        except Exception:
-            pass
 
     base_wf_tcp = subtract_port_specs(existing_wf_tcp, prev_extra_tcp) if prev_extra_tcp else (existing_wf_tcp or "")
     base_wf_udp = subtract_port_specs(existing_wf_udp, prev_extra_udp) if prev_extra_udp else (existing_wf_udp or "")
@@ -245,7 +225,7 @@ class Zapret2PresetSyncLayer:
         self._update_wf_out_ports_in_base_args = update_wf_out_ports_in_base_args or (lambda preset: preset.base_args)
 
     def sync_preset(self, preset: Preset, changed_category: str | None = None) -> bool:
-        active_path = get_active_preset_path()
+        active_path = _get_selected_source_path()
         is_basic_direct = self._is_basic_direct()
 
         try:
@@ -254,12 +234,12 @@ class Zapret2PresetSyncLayer:
             if changed_category and raw_blocks:
                 return self._sync_with_raw_block_preservation(
                     preset,
-                    active_path=str(active_path),
+                    active_path=active_path,
                     changed_category=str(changed_category),
                     raw_blocks=raw_blocks,
                     is_basic_direct=is_basic_direct,
                 )
-            return self._sync_full_regeneration(preset, active_path=str(active_path), is_basic_direct=is_basic_direct)
+            return self._sync_full_regeneration(preset, active_path=active_path, is_basic_direct=is_basic_direct)
         except PermissionError as e:
             log(f"Cannot write selected source preset (locked by winws2?): {e}", "ERROR")
             raise
@@ -333,13 +313,20 @@ class Zapret2PresetSyncLayer:
 
         icon_color = normalize_preset_icon_color(getattr(preset, "icon_color", DEFAULT_PRESET_ICON_COLOR))
         preset.icon_color = icon_color
+        template_origin = str(getattr(preset, "_template_origin", "") or "").strip()
 
         lines: list[str] = [
             f"# Preset: {preset.name}",
-            f"# Modified: {datetime.now().isoformat()}",
-            f"# IconColor: {icon_color}",
-            "",
         ]
+        if template_origin:
+            lines.append(f"# TemplateOrigin: {template_origin}")
+        lines.extend(
+            [
+                f"# Modified: {datetime.now().isoformat()}",
+                f"# IconColor: {icon_color}",
+                "",
+            ]
+        )
 
         base_args_text = self._inject_debug_into_base_args(preset.base_args)
         if base_args_text:
@@ -505,9 +492,17 @@ class Zapret2PresetSyncLayer:
 
         icon_color = normalize_preset_icon_color(getattr(preset, "icon_color", DEFAULT_PRESET_ICON_COLOR))
         preset.icon_color = icon_color
-        data.raw_header = f"""# Preset: {preset.name}
-# Modified: {datetime.now().isoformat()}
-# IconColor: {icon_color}"""
+        template_origin = str(getattr(preset, "_template_origin", "") or "").strip()
+        header_lines = [f"# Preset: {preset.name}"]
+        if template_origin:
+            header_lines.append(f"# TemplateOrigin: {template_origin}")
+        header_lines.extend(
+            [
+                f"# Modified: {datetime.now().isoformat()}",
+                f"# IconColor: {icon_color}",
+            ]
+        )
+        data.raw_header = "\n".join(header_lines)
 
         for cat_name, cat in preset.categories.items():
             if cat.tcp_enabled and cat.has_tcp():
@@ -550,10 +545,11 @@ class Zapret2PresetSyncLayer:
         return success
 
     def _commit_generated_launch_config_text(self, content: str, *, log_message: str) -> bool:
-        active_path = get_active_preset_path()
+        from pathlib import Path
+
+        active_path = Path(_get_selected_source_path())
         try:
-            active_path.parent.mkdir(parents=True, exist_ok=True)
-            active_path.write_text(str(content or ""), encoding="utf-8")
+            atomic_write_text(active_path, str(content or ""), encoding="utf-8")
             self._invalidate_cache()
             log(log_message, "DEBUG")
             if self._on_dpi_reload_needed:

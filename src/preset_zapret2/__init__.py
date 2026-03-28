@@ -8,7 +8,6 @@ from .preset_model import CategoryConfig, Preset, SyndataSettings, validate_pres
 
 # Storage functions (low-level)
 from .preset_storage import (
-    get_active_preset_path,
     get_presets_dir,
     get_user_settings_path,
     import_preset,
@@ -378,7 +377,6 @@ __all__ = [
     # Storage functions
     "get_presets_dir",
     "get_preset_path_by_file_name",
-    "get_active_preset_path",
     "get_user_settings_path",
     "preset_file_exists",
     "load_preset_by_file_name",

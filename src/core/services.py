@@ -30,3 +30,26 @@ def get_selection_service() -> PresetSelectionService:
 @lru_cache(maxsize=1)
 def get_direct_flow_coordinator() -> DirectFlowCoordinator:
     return DirectFlowCoordinator()
+
+
+@lru_cache(maxsize=1)
+def get_preset_store():
+    from preset_zapret2.preset_store import PresetStore
+
+    return PresetStore()
+
+
+@lru_cache(maxsize=1)
+def get_preset_store_v1():
+    from preset_zapret1.preset_store import PresetStoreV1
+
+    return PresetStoreV1()
+
+
+def reset_cached_services() -> None:
+    get_direct_flow_coordinator.cache_clear()
+    get_selection_service.cache_clear()
+    get_preset_repository.cache_clear()
+    get_app_paths.cache_clear()
+    get_preset_store.cache_clear()
+    get_preset_store_v1.cache_clear()

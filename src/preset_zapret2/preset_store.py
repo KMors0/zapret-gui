@@ -1,6 +1,6 @@
 # preset_zapret2/preset_store.py
 """
-Central in-memory preset store (singleton).
+Central in-memory preset store.
 
 Provides a single source of truth for all preset data across the application.
 All UI pages and backend modules should use this store instead of creating
@@ -9,7 +9,7 @@ independent PresetManager instances.
 Features:
 - All presets loaded into memory once, refreshed only when files change
 - Qt signals for preset lifecycle events (change, switch, create, delete)
-- Thread-safe singleton access via get_preset_store()
+- Shared access via core.services.get_preset_store()
 
 Usage:
     from preset_zapret2.preset_store import get_preset_store
@@ -37,7 +37,7 @@ from log import log
 
 class PresetStore(QObject):
     """
-    Central in-memory preset store (singleton).
+    Central in-memory preset store.
 
     Holds all parsed Preset objects in memory.
     Emits Qt signals when preset data changes.
@@ -47,21 +47,11 @@ class PresetStore(QObject):
     # Emitted when the preset list or content changes (add/delete/rename/import/reset).
     presets_changed = pyqtSignal()
 
-    # Emitted when the selected source preset is switched. Argument: new preset name.
+    # Emitted when the selected source preset is switched. Argument: new preset file_name.
     preset_switched = pyqtSignal(str)
 
-    # Emitted when a single preset's content is updated (save/sync).
+    # Emitted when a single preset's content is updated (save/sync). Argument: preset file_name.
     preset_updated = pyqtSignal(str)
-
-    # ── Singleton ────────────────────────────────────────────────────────
-    _instance: Optional[PresetStore] = None
-
-    @classmethod
-    def instance(cls) -> PresetStore:
-        """Returns the singleton PresetStore instance, creating it if needed."""
-        if cls._instance is None:
-            cls._instance = cls()
-        return cls._instance
 
     def __init__(self, parent: Optional[QObject] = None):
         super().__init__(parent)
@@ -117,7 +107,7 @@ class PresetStore(QObject):
         self._ensure_loaded()
         target_file_name = str(file_name or "").strip()
         self._reload_single_preset(target_file_name)
-        self.preset_updated.emit(self.get_display_name(target_file_name))
+        self.preset_updated.emit(target_file_name)
 
     def notify_presets_changed(self) -> None:
         """
@@ -136,7 +126,7 @@ class PresetStore(QObject):
         target_file_name = str(file_name or "").strip() or None
         self._active_file_name = target_file_name
         self._active_name = self.get_display_name(target_file_name) if target_file_name else None
-        self.preset_switched.emit(self._active_name or "")
+        self.preset_switched.emit(target_file_name or "")
 
     def notify_active_name_changed(self) -> None:
         try:
@@ -244,5 +234,7 @@ class PresetStore(QObject):
 
 
 def get_preset_store() -> PresetStore:
-    """Returns the global PresetStore singleton."""
-    return PresetStore.instance()
+    """Returns the shared PresetStore from core services."""
+    from core.services import get_preset_store as _get_preset_store_service
+
+    return _get_preset_store_service()

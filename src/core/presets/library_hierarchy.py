@@ -305,9 +305,9 @@ class PresetHierarchyStore:
         self,
         presets: Iterable[object],
         *,
-        is_builtin_name: Callable[[str], bool] | None = None,
+        is_builtin_resolver: Callable[[str], bool] | None = None,
     ) -> list[dict]:
-        builtin_resolver = is_builtin_name or (lambda _name: False)
+        builtin_resolver = is_builtin_resolver or (lambda _name: False)
         entries: list[dict] = []
         seen_keys: set[str] = set()
 
@@ -331,7 +331,7 @@ class PresetHierarchyStore:
             seen_keys.add(lowered_key)
 
             if builtin_value is None:
-                is_builtin = bool(builtin_resolver(display_name))
+                is_builtin = bool(builtin_resolver(key))
             else:
                 is_builtin = bool(builtin_value)
 
@@ -559,13 +559,13 @@ class PresetHierarchyStore:
         preset_names: Iterable[object],
         folder_id: str,
         *,
-        is_builtin_name: Callable[[str], bool] | None = None,
+        is_builtin_resolver: Callable[[str], bool] | None = None,
     ) -> list[str]:
         self._ensure_loaded()
         assert self._state is not None
 
         target = str(folder_id or ROOT_FOLDER_ID).strip() or ROOT_FOLDER_ID
-        entries = self._normalize_preset_entries(preset_names, is_builtin_name=is_builtin_name)
+        entries = self._normalize_preset_entries(preset_names, is_builtin_resolver=is_builtin_resolver)
         self._register_entries(entries)
         self._migrate_legacy_meta_keys(entries)
 
@@ -588,12 +588,12 @@ class PresetHierarchyStore:
         preset_name: str,
         target_folder_id: str | None,
         *,
-        is_builtin_name: Callable[[str], bool] | None = None,
+        is_builtin_resolver: Callable[[str], bool] | None = None,
     ) -> bool:
         self._ensure_loaded()
         assert self._state is not None
 
-        entries = self._normalize_preset_entries(preset_names, is_builtin_name=is_builtin_name)
+        entries = self._normalize_preset_entries(preset_names, is_builtin_resolver=is_builtin_resolver)
         self._register_entries(entries)
         self._migrate_legacy_meta_keys(entries)
 
@@ -609,8 +609,8 @@ class PresetHierarchyStore:
         source_folder = self.get_effective_folder_id(source_name, is_builtin=source_is_builtin, display_name=source_display_name)
         if source_is_builtin and target_folder != source_folder:
             return False
-        source_names = self.list_presets_in_folder(entries, source_folder, is_builtin_name=is_builtin_name)
-        target_names = self.list_presets_in_folder(entries, target_folder, is_builtin_name=is_builtin_name)
+        source_names = self.list_presets_in_folder(entries, source_folder, is_builtin_resolver=is_builtin_resolver)
+        target_names = self.list_presets_in_folder(entries, target_folder, is_builtin_resolver=is_builtin_resolver)
 
         if source_folder == target_folder:
             reordered = [name for name in target_names if name != source_name]
@@ -646,12 +646,12 @@ class PresetHierarchyStore:
         preset_name: str,
         target_name: str,
         *,
-        is_builtin_name: Callable[[str], bool] | None = None,
+        is_builtin_resolver: Callable[[str], bool] | None = None,
     ) -> bool:
         self._ensure_loaded()
         assert self._state is not None
 
-        entries = self._normalize_preset_entries(preset_names, is_builtin_name=is_builtin_name)
+        entries = self._normalize_preset_entries(preset_names, is_builtin_resolver=is_builtin_resolver)
         self._register_entries(entries)
         self._migrate_legacy_meta_keys(entries)
 
@@ -674,8 +674,8 @@ class PresetHierarchyStore:
         )
         if source_is_builtin and target_folder != source_folder:
             return False
-        source_names = self.list_presets_in_folder(entries, source_folder, is_builtin_name=is_builtin_name)
-        target_names = self.list_presets_in_folder(entries, target_folder, is_builtin_name=is_builtin_name)
+        source_names = self.list_presets_in_folder(entries, source_folder, is_builtin_resolver=is_builtin_resolver)
+        target_names = self.list_presets_in_folder(entries, target_folder, is_builtin_resolver=is_builtin_resolver)
 
         if source_folder == target_folder:
             reordered = [name for name in target_names if name != source_name]
@@ -717,9 +717,9 @@ class PresetHierarchyStore:
         preset_name: str,
         direction: int,
         *,
-        is_builtin_name: Callable[[str], bool] | None = None,
+        is_builtin_resolver: Callable[[str], bool] | None = None,
     ) -> bool:
-        entries = self._normalize_preset_entries(preset_names, is_builtin_name=is_builtin_name)
+        entries = self._normalize_preset_entries(preset_names, is_builtin_resolver=is_builtin_resolver)
         self._register_entries(entries)
         self._migrate_legacy_meta_keys(entries)
 
@@ -735,7 +735,7 @@ class PresetHierarchyStore:
             is_builtin=source_is_builtin,
             display_name=str((source_entry or {}).get("display_name") or source_name),
         )
-        ordered_names = self.list_presets_in_folder(entries, source_folder, is_builtin_name=is_builtin_name)
+        ordered_names = self.list_presets_in_folder(entries, source_folder, is_builtin_resolver=is_builtin_resolver)
         if source_name not in ordered_names:
             return False
 
@@ -1036,13 +1036,13 @@ class PresetHierarchyStore:
         preset_names: Iterable[object],
         *,
         query: str = "",
-        is_builtin_name: Callable[[str], bool] | None = None,
+        is_builtin_resolver: Callable[[str], bool] | None = None,
     ) -> list[dict]:
         self._ensure_loaded()
         assert self._state is not None
 
         query_text = str(query or "").strip().lower()
-        entries = self._normalize_preset_entries(preset_names, is_builtin_name=is_builtin_name)
+        entries = self._normalize_preset_entries(preset_names, is_builtin_resolver=is_builtin_resolver)
         self._register_entries(entries)
         self._migrate_legacy_meta_keys(entries)
         by_id = {item["id"]: item for item in self._state["folders"]}

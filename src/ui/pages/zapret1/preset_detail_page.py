@@ -10,11 +10,6 @@ class Zapret1PresetDetailPage(PresetSubpageBase):
     def _default_title(self) -> str:
         return "Пресет Zapret 1"
 
-    def _create_manager(self):
-        from core.presets.direct_facade import DirectPresetFacade
-
-        return DirectPresetFacade.from_launch_method("direct_zapret1")
-
     def _get_preset_path(self, name: str) -> Path:
         from core.services import get_app_paths
 

@@ -206,13 +206,11 @@ class PresetData:
 
     Attributes:
         name: Preset name from # Preset: line
-        active_preset: Active preset name from # ActivePreset: line (for preset-zapret2.txt)
         base_args: Arguments before first --filter-* (lua-init, wf-*, blob=*)
         categories: List of category blocks
         raw_header: Raw header lines (comments at start)
     """
     name: str = "Unnamed"
-    active_preset: Optional[str] = None
     base_args: str = ""
     categories: List[CategoryBlock] = field(default_factory=list)
     raw_header: str = ""
@@ -1189,8 +1187,6 @@ def parse_preset_file(file_path: Path) -> PresetData:
     File format:
     ```
     # Preset: My Config
-    # ActivePreset: my_config
-
     --lua-init=@lua/zapret-lib.lua
     --wf-tcp-out=443
     --blob=tls7:@bin/tls_clienthello_7.bin
@@ -1257,11 +1253,6 @@ def parse_preset_content(content: str) -> PresetData:
             name_match = re.match(r'#\s*Preset:\s*(.+)', stripped, re.IGNORECASE)
             if name_match:
                 data.name = name_match.group(1).strip()
-
-            # Extract legacy ActivePreset header if present.
-            active_match = re.match(r'#\s*ActivePreset:\s*(.+)', stripped, re.IGNORECASE)
-            if active_match:
-                data.active_preset = active_match.group(1).strip()
 
             # Also check "Strategy:" for compatibility
             strategy_match = re.match(r'#\s*Strategy:\s*(.+)', stripped, re.IGNORECASE)
@@ -1508,9 +1499,6 @@ def generate_preset_content(data: PresetData, include_header: bool = True) -> st
                 lines.append("")
         else:
             lines.append(f"# Preset: {data.name}")
-            if data.active_preset:
-                lines.append(f"# ActivePreset: {data.active_preset}")
-
             lines.append("")
 
     # Base args

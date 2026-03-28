@@ -1,5 +1,6 @@
 # Preset: Default (game filter)
-# BuiltinVersion: 2.14
+# TemplateOrigin: Default (game filter)
+# BuiltinVersion: 2.15
 # Modified: 2026-01-21T17:52:34.648239
 # IconColor: #a8c5ff
 

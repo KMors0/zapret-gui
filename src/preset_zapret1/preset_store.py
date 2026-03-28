@@ -1,5 +1,5 @@
 # preset_zapret1/preset_store.py
-"""Central in-memory preset store for Zapret 1 (singleton)."""
+"""Central in-memory preset store for Zapret 1."""
 
 from __future__ import annotations
 
@@ -15,16 +15,8 @@ class PresetStoreV1(QObject):
     """Central in-memory preset store for Zapret 1 presets."""
 
     presets_changed = pyqtSignal()
-    preset_switched = pyqtSignal(str)
-    preset_updated = pyqtSignal(str)
-
-    _instance: Optional[PresetStoreV1] = None
-
-    @classmethod
-    def instance(cls) -> PresetStoreV1:
-        if cls._instance is None:
-            cls._instance = cls()
-        return cls._instance
+    preset_switched = pyqtSignal(str)  # file_name
+    preset_updated = pyqtSignal(str)  # file_name
 
     def __init__(self, parent: Optional[QObject] = None):
         super().__init__(parent)
@@ -62,7 +54,7 @@ class PresetStoreV1(QObject):
         self._ensure_loaded()
         target_file_name = str(file_name or "").strip()
         self._reload_single_preset(target_file_name)
-        self.preset_updated.emit(self.get_display_name(target_file_name))
+        self.preset_updated.emit(target_file_name)
 
     def notify_presets_changed(self) -> None:
         self._do_full_load()
@@ -72,7 +64,7 @@ class PresetStoreV1(QObject):
         target_file_name = str(file_name or "").strip() or None
         self._active_file_name = target_file_name
         self._active_name = self.get_display_name(target_file_name) if target_file_name else None
-        self.preset_switched.emit(self._active_name or "")
+        self.preset_switched.emit(target_file_name or "")
 
     def notify_active_name_changed(self) -> None:
         try:
@@ -167,5 +159,7 @@ class PresetStoreV1(QObject):
 
 
 def get_preset_store_v1() -> PresetStoreV1:
-    """Returns the global PresetStoreV1 singleton."""
-    return PresetStoreV1.instance()
+    """Returns the shared PresetStoreV1 from core services."""
+    from core.services import get_preset_store_v1 as _get_preset_store_v1_service
+
+    return _get_preset_store_v1_service()

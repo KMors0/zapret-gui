@@ -91,8 +91,9 @@ class UIManager:
                 launch_method = ""
             
             # Обновляем главную страницу
-            if hasattr(self.app, 'home_page'):
-                self.app.home_page.update_dpi_status(is_running, strategy_name)
+            home_page = get_loaded_page(self.app, PageName.HOME)
+            if home_page is not None and hasattr(home_page, "update_dpi_status"):
+                home_page.update_dpi_status(is_running, strategy_name)
             
             # Обновляем страницу управления
             control_page = get_loaded_page(self.app, PageName.CONTROL)
@@ -172,7 +173,8 @@ class UIManager:
     def update_subscription_button_text(self, is_premium: bool, days_remaining: int) -> None:
         """⚡ Обновляет текст кнопки подписки"""
         try:
-            subscription_btn = getattr(self.app, 'subscription_btn', None)
+            about_page = get_loaded_page(self.app, PageName.ABOUT)
+            subscription_btn = getattr(about_page, 'premium_btn', None)
             if subscription_btn is None:
                 return
             

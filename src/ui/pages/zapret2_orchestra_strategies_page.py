@@ -170,7 +170,8 @@ class Zapret2OrchestraStrategiesPage(BasePage):
 
     def _navigate_to_control(self) -> None:
         try:
-            from ui.page_names import PageName
+from ui.page_names import PageName
+from ui.main_window_pages import get_loaded_page
 
             if self.parent_app and hasattr(self.parent_app, "show_page"):
                 self.parent_app.show_page(PageName.ZAPRET2_ORCHESTRA_CONTROL)
@@ -797,7 +798,7 @@ class Zapret2OrchestraStrategiesPage(BasePage):
             app = self.parent_app
             if app is None:
                 return
-            dpi_page = getattr(app, "dpi_settings_page", None)
+            dpi_page = get_loaded_page(app, PageName.DPI_SETTINGS)
             if dpi_page is not None:
                 dpi_page.update_filter_display(filters)
         except Exception as e:

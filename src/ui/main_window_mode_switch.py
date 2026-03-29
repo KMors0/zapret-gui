@@ -3,6 +3,8 @@ from __future__ import annotations
 from PyQt6.QtCore import QTimer
 
 from log import log
+from ui.main_window_pages import get_loaded_page
+from ui.page_names import PageName
 
 
 def handle_main_window_launch_method_changed(window, method: str) -> None:
@@ -87,9 +89,13 @@ def complete_main_window_method_switch(window, method: str) -> None:
         pass
 
     # Reload strategy pages
-    for attr in ('zapret2_strategies_page', 'zapret2_orchestra_strategies_page',
-                 'orchestra_zapret2_control_page', 'zapret1_strategies_page'):
-        page = getattr(window, attr, None)
+    for page_name in (
+        PageName.ZAPRET2_DIRECT,
+        PageName.ZAPRET2_ORCHESTRA,
+        PageName.ZAPRET2_ORCHESTRA_CONTROL,
+        PageName.ZAPRET1_DIRECT,
+    ):
+        page = get_loaded_page(window, page_name)
         if page and hasattr(page, 'reload_for_mode_change'):
             page.reload_for_mode_change()
 

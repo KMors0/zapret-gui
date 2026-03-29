@@ -853,14 +853,16 @@ class DPIController:
                     page.set_loading(True, "Запуск Zapret...")
                 except Exception:
                     pass
-        if hasattr(self.app, 'home_page'):
-            self.app.home_page.set_loading(True, "Запуск Zapret...")
-        
+        home_page = get_loaded_page(self.app, PageName.HOME)
+        if home_page is not None:
+            home_page.set_loading(True, "Запуск Zapret...")
+
         # Блокируем кнопки во время операции
-        if hasattr(self.app, 'start_btn'):
-            self.app.start_btn.setEnabled(False)
-        if hasattr(self.app, 'stop_btn'):
-            self.app.stop_btn.setEnabled(False)
+        if home_page is not None:
+            if hasattr(home_page, "start_btn"):
+                home_page.start_btn.setEnabled(False)
+            if hasattr(home_page, "stop_btn"):
+                home_page.stop_btn.setEnabled(False)
         
         # Создаем поток и worker
         self._dpi_start_thread = QThread()
@@ -934,14 +936,16 @@ class DPIController:
                     page.set_loading(True, "Остановка Zapret...")
                 except Exception:
                     pass
-        if hasattr(self.app, 'home_page'):
-            self.app.home_page.set_loading(True, "Остановка Zapret...")
-        
+        home_page = get_loaded_page(self.app, PageName.HOME)
+        if home_page is not None:
+            home_page.set_loading(True, "Остановка Zapret...")
+
         # Блокируем кнопки во время операции
-        if hasattr(self.app, 'start_btn'):
-            self.app.start_btn.setEnabled(False)
-        if hasattr(self.app, 'stop_btn'):
-            self.app.stop_btn.setEnabled(False)
+        if home_page is not None:
+            if hasattr(home_page, "start_btn"):
+                home_page.start_btn.setEnabled(False)
+            if hasattr(home_page, "stop_btn"):
+                home_page.stop_btn.setEnabled(False)
         
         # Создаем поток и worker
         self._dpi_stop_thread = QThread()
@@ -1000,11 +1004,13 @@ class DPIController:
     def _on_dpi_start_finished(self, success, error_message):
         """Обрабатывает завершение асинхронного запуска DPI"""
         try:
+            home_page = get_loaded_page(self.app, PageName.HOME)
             # Восстанавливаем кнопки
-            if hasattr(self.app, 'start_btn'):
-                self.app.start_btn.setEnabled(True)
-            if hasattr(self.app, 'stop_btn'):
-                self.app.stop_btn.setEnabled(True)
+            if home_page is not None:
+                if hasattr(home_page, "start_btn"):
+                    home_page.start_btn.setEnabled(True)
+                if hasattr(home_page, "stop_btn"):
+                    home_page.stop_btn.setEnabled(True)
             
             # ✅ Скрываем индикатор загрузки на страницах
             for page_name in (
@@ -1018,8 +1024,8 @@ class DPIController:
                         page.set_loading(False)
                     except Exception:
                         pass
-            if hasattr(self.app, 'home_page'):
-                self.app.home_page.set_loading(False)
+            if home_page is not None:
+                home_page.set_loading(False)
 
             # ✅ Показываем галочку успеха (скрываем спиннер)
             if hasattr(self.app, 'main_window') and hasattr(self.app.main_window, 'strategies_page'):
@@ -1126,11 +1132,13 @@ class DPIController:
     def _on_dpi_stop_finished(self, success, error_message):
         """Обрабатывает завершение асинхронной остановки DPI"""
         try:
+            home_page = get_loaded_page(self.app, PageName.HOME)
             # Восстанавливаем кнопки
-            if hasattr(self.app, 'start_btn'):
-                self.app.start_btn.setEnabled(True)
-            if hasattr(self.app, 'stop_btn'):
-                self.app.stop_btn.setEnabled(True)
+            if home_page is not None:
+                if hasattr(home_page, "start_btn"):
+                    home_page.start_btn.setEnabled(True)
+                if hasattr(home_page, "stop_btn"):
+                    home_page.stop_btn.setEnabled(True)
             
             # ✅ Скрываем индикатор загрузки на страницах
             for page_name in (
@@ -1144,8 +1152,8 @@ class DPIController:
                         page.set_loading(False)
                     except Exception:
                         pass
-            if hasattr(self.app, 'home_page'):
-                self.app.home_page.set_loading(False)
+            if home_page is not None:
+                home_page.set_loading(False)
 
             # ✅ Показываем галочку (скрываем спиннер)
             if hasattr(self.app, 'main_window') and hasattr(self.app.main_window, 'strategies_page'):

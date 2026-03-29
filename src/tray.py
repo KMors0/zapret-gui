@@ -448,8 +448,10 @@ class SystemTrayManager:
             pass
 
         try:
-            if hasattr(self.parent, "strategy_detail_page"):
-                self.parent.strategy_detail_page._close_preview_dialog(force=True)
+            for page_name in (PageName.ZAPRET2_STRATEGY_DETAIL, PageName.ZAPRET2_ORCHESTRA_STRATEGY_DETAIL):
+                page = get_loaded_page(self.parent, page_name)
+                if page is not None and hasattr(page, "_close_preview_dialog"):
+                    page._close_preview_dialog(force=True)
         except Exception:
             pass
 

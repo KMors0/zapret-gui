@@ -88,6 +88,30 @@ def connect_signal_once(window, key: str, signal_obj, slot_obj) -> None:
         pass
 
 
+def _connect_appearance_autostart_theme_bridge(window) -> None:
+    appearance_page = get_loaded_page(window, PageName.APPEARANCE)
+    autostart_page = get_loaded_page(window, PageName.AUTOSTART)
+    if appearance_page is None or autostart_page is None:
+        return
+    if not hasattr(autostart_page, "on_theme_changed"):
+        return
+
+    if hasattr(appearance_page, "display_mode_changed"):
+        connect_signal_once(
+            window,
+            "appearance.display_mode_changed->autostart.on_theme_changed",
+            appearance_page.display_mode_changed,
+            lambda _mode: autostart_page.on_theme_changed(),
+        )
+    elif hasattr(appearance_page, "theme_changed"):
+        connect_signal_once(
+            window,
+            "appearance.theme_changed->autostart.on_theme_changed",
+            appearance_page.theme_changed,
+            autostart_page.on_theme_changed,
+        )
+
+
 def ensure_page_in_stacked_widget(window, page: QWidget | None) -> None:
     stack = getattr(window, "stackedWidget", None)
     if page is None or stack is None:
@@ -101,6 +125,21 @@ def ensure_page_in_stacked_widget(window, page: QWidget | None) -> None:
 
 def connect_lazy_page_signals(window, page_name: PageName, page: QWidget) -> None:
     if page_name == PageName.HOME:
+        for button_attr, handler in (
+            ("start_btn", window._request_start_dpi),
+            ("stop_btn", window._request_stop_dpi),
+            ("test_btn", window._request_open_connection_test),
+            ("folder_btn", window._request_open_folder),
+        ):
+            button = getattr(page, button_attr, None)
+            signal = getattr(button, "clicked", None)
+            if signal is not None:
+                connect_signal_once(
+                    window,
+                    f"home.{button_attr}.clicked",
+                    signal,
+                    handler,
+                )
         if hasattr(page, "premium_link_btn"):
             connect_signal_once(
                 window,
@@ -184,23 +223,7 @@ def connect_lazy_page_signals(window, page_name: PageName, page: QWidget) -> Non
                 page.navigate_to_dpi_settings,
                 window._navigate_to_dpi_settings,
             )
-
-        appearance_page = getattr(window, "appearance_page", None)
-        if appearance_page is not None:
-            if hasattr(appearance_page, "display_mode_changed") and hasattr(page, "on_theme_changed"):
-                connect_signal_once(
-                    window,
-                    "appearance.display_mode_changed->autostart.on_theme_changed",
-                    appearance_page.display_mode_changed,
-                    lambda _mode: page.on_theme_changed(),
-                )
-            elif hasattr(appearance_page, "theme_changed") and hasattr(page, "on_theme_changed"):
-                connect_signal_once(
-                    window,
-                    "appearance.theme_changed->autostart.on_theme_changed",
-                    appearance_page.theme_changed,
-                    page.on_theme_changed,
-                )
+        _connect_appearance_autostart_theme_bridge(window)
 
     if page_name == PageName.APPEARANCE:
         if hasattr(page, "display_mode_changed"):
@@ -272,23 +295,7 @@ def connect_lazy_page_signals(window, page_name: PageName, page: QWidget) -> Non
                 page.ui_language_changed,
                 window._on_ui_language_changed,
             )
-
-        autostart_page = getattr(window, "autostart_page", None)
-        if autostart_page is not None and hasattr(autostart_page, "on_theme_changed"):
-            if hasattr(page, "display_mode_changed"):
-                connect_signal_once(
-                    window,
-                    "appearance.display_mode_changed->autostart.on_theme_changed",
-                    page.display_mode_changed,
-                    lambda _mode: autostart_page.on_theme_changed(),
-                )
-            elif hasattr(page, "theme_changed"):
-                connect_signal_once(
-                    window,
-                    "appearance.theme_changed->autostart.on_theme_changed",
-                    page.theme_changed,
-                    autostart_page.on_theme_changed,
-                )
+        _connect_appearance_autostart_theme_bridge(window)
 
     if page_name == PageName.ABOUT:
         if hasattr(page, "premium_btn"):
@@ -305,11 +312,6 @@ def connect_lazy_page_signals(window, page_name: PageName, page: QWidget) -> Non
                 page.update_btn.clicked,
                 lambda: window.show_page(PageName.SERVERS),
             )
-        try:
-            window.server_status_btn = getattr(page, "update_btn", getattr(window, "server_status_btn", None))
-            window.subscription_btn = getattr(page, "premium_btn", getattr(window, "subscription_btn", None))
-        except Exception:
-            pass
 
     if page_name == PageName.PREMIUM and hasattr(page, "subscription_updated"):
         connect_signal_once(

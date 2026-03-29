@@ -326,14 +326,7 @@ class InitializationManager:
     def _connect_signals(self):
         """Подключение всех сигналов"""
         try:
-            self.app.start_clicked.connect(self._on_start_clicked)
-            self.app.stop_clicked.connect(lambda: self.app.dpi_controller.stop_dpi_async())
-            if getattr(self.app, "open_folder_btn", None) is not None:
-                self.app.open_folder_btn.clicked.connect(self.app.open_folder)
-            if getattr(self.app, "test_connection_btn", None) is not None:
-                self.app.test_connection_btn.clicked.connect(self.app.open_connection_test)
-            if getattr(self.app, "server_status_btn", None) is not None:
-                self.app.server_status_btn.clicked.connect(self.app.show_servers_page)
+            self.app._start_requested_handler = self._on_start_clicked
             
             self.init_tasks_completed.add('signals')
 

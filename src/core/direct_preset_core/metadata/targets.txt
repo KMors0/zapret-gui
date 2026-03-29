@@ -1,6 +1,6 @@
-# Categories configuration
+# Target metadata configuration
 version = 1.0
-description = Встроенные категории сервисов для обхода блокировок
+description = Встроенные metadata записи для target_key direct_preset_core
 
 [googlevideo_tcp]
 full_name = googlevideo.com (CDN сервера)
@@ -18,7 +18,7 @@ base_filter_ipset = --filter-tcp=80,443 --ipset=ipset-googlevideo.txt
 base_filter_hostlist = --filter-tcp=80,443 --hostlist-domains=googlevideo.com
 strategy_type = tcp
 
-[youtube]
+[youtube_tcp]
 full_name = youtube.com (интерфейс)
 description = YouTube через TCP протокол (порты 80, 443)
 tooltip = 🎬 YouTube через TCP протокол (порты 80, 443)\nОбходит блокировку обычного YouTube трафика через стандартные веб-порты.\nНЕ обходит Google Video трафик!\nTCP - это надежный протокол передачи данных, используется для загрузки веб-страниц и видео.\nРаботает с youtube.com и youtu.be.
@@ -64,7 +64,7 @@ icon_color = #4285F4
 base_filter_hostlist = --filter-tcp=80,443 --hostlist=google.txt
 strategy_type = tcp
 
-[update_discord]
+[discord_update_tcp]
 full_name = updates.discord.com
 description = Обновления Discord мессенджер (порт 443)
 tooltip = 💬 Пробивает прицельно отдельно апдейт дискорда. Полезно когда сайт discord.com грузится, а приложение Windows постоянно ищет обновления.
@@ -155,7 +155,7 @@ icon_color = #7289DA
 base_filter = --filter-l7=stun,discord --payload=stun,discord_ip_discovery
 strategy_type = discord_voice
 
-[udp_discord]
+[discord_udp]
 full_name = Discord
 description = UDP протокол Discord мессенджер (порт 443)
 tooltip = 💬 UDP для веб интерфейса дискорда, обычно не нужен но пусть будет.
@@ -692,7 +692,7 @@ icon_color = #1DA1F2
 base_filter = --filter-tcp=80,443 --hostlist-domains=twimg.com
 strategy_type = tcp
 
-[other]
+[other_tcp]
 full_name = Hostlist (HTTPS)
 description = Заблокированные сайты из списка (порты 80, 443)
 tooltip = 🌐 Заблокированные сайты из списка (порты 80, 443)\nОбходит блокировку сайтов из файла other.txt через TCP.\nВключает сотни популярных заблокированных сайтов и сервисов.
@@ -704,12 +704,29 @@ needs_new_separator = true
 command_group = hostlists
 icon_name = fa5b.chrome
 icon_color = #2696F1
-base_filter_ipset = --filter-tcp=443 --ipset=ipset-censorliber.txt
-base_filter_hostlist = --filter-tcp=443 --hostlist-exclude=netrogat.txt --hostlist=other.txt --hostlist=russia-blacklist.txt
+base_filter_ipset = 
+base_filter_hostlist = --filter-tcp=443 --hostlist-exclude=netrogat.txt --hostlist=other.txt
 strategy_type = tcp
 strip_payload = true
 
-[porn_http]
+[russia_blacklist_tcp]
+full_name = Russia blacklist (HTTPS)
+description = Россия blacklist (HTTPS)
+tooltip = 🌐 Russia blacklist (HTTPS)\nОтдельный target для списка russia-blacklist.txt.
+color = #66ff66
+default_strategy = none
+ports = 80, 443
+protocol = TCP
+needs_new_separator = true
+command_group = hostlists
+icon_name = fa5b.chrome
+icon_color = #2696F1
+base_filter_ipset = 
+base_filter_hostlist = --filter-tcp=443 --hostlist=russia-blacklist.txt
+strategy_type = tcp
+strip_payload = true
+
+[porn_tcp]
 full_name = Porn (HTTP)
 description = Порно-сайты через HTTP (порт 80)
 tooltip = 🔞 Порно-сайты через HTTP (порт 80)\nОбходит блокировку порно-сайтов работающих по HTTP протоколу.\nМногие порно-сайты используют HTTP вместо HTTPS.\nМожно редактировать список сайтов в ipset-porn.txt.
@@ -725,8 +742,8 @@ base_filter = --filter-tcp=80,443 --ipset=ipset-porn.txt
 strategy_type = http80
 strip_payload = true
 
-[tankix_http]
-full_name = TankiX (HTTP)
+[resources_tcp]
+full_name = TankiX resources
 description = TankiX через HTTP (порт 80)
 tooltip = TankiX через HTTP (порт 80)\nОбходит блокировку TankiX работающих по HTTP протоколу.\nМногие TankiX используют HTTP вместо HTTPS.\nМожно редактировать список сайтов в ipset-porn.txt.
 color = #ff69b4
@@ -737,14 +754,30 @@ needs_new_separator = true
 command_group = ipsets
 icon_name = fa5s.gamepad
 icon_color = #FF69B4
-base_filter = --filter-tcp=80,443 --hostlist-domains=resources.txrevive.com,main.txrevive.com
+base_filter = --filter-tcp=80,443 --hostlist-domains=resources.txrevive.com
 strategy_type = http80
 strip_payload = true
 
-[hostlist_80port]
-full_name = Hostlist (HTTP)
-description = Заблокированные сайты из списка (порт 80)
-tooltip = 🌐 Заблокированные сайты из списка (порт 80)\nОбходит блокировку сайтов из файла other.txt через HTTP (порт 80).\nПолезно если провайдер блокирует только HTTP трафик, а HTTPS оставляет открытым.\nМожно редактировать список сайтов во вкладке Hostlist.
+[main_tcp]
+full_name = TankiX main
+description = TankiX через HTTP (порт 80)
+tooltip = TankiX через HTTP (порт 80)\nОбходит блокировку TankiX работающих по HTTP протоколу.\nМногие TankiX используют HTTP вместо HTTPS.\nМожно редактировать список сайтов в ipset-porn.txt.
+color = #ff69b4
+default_strategy = none
+ports = 80
+protocol = TCP
+needs_new_separator = true
+command_group = ipsets
+icon_name = fa5s.gamepad
+icon_color = #FF69B4
+base_filter = --filter-tcp=80,443 --hostlist-domains=main.txrevive.com
+strategy_type = http80
+strip_payload = true
+
+[all_tcp]
+full_name = All
+description = All (HTTP)
+tooltip = 🌐 All (HTTP)\nTarget для ipset-all.txt на 80 порту.
 color = #00ffcc
 default_strategy = none
 ports = 80
@@ -753,12 +786,28 @@ needs_new_separator = true
 command_group = hostlists
 icon_name = fa5b.chrome
 icon_color = #2696F1
-base_filter = --filter-tcp=80 --ipset=ipset-all.txt --ipset=ipset-base.txt
+base_filter = --filter-tcp=80 --ipset=ipset-all.txt
 strategy_type = http80
 strip_payload = true
 
-[ipset_tcp_cloudflare]
-full_name = IPset TCP (CloudFlare)
+[base_tcp]
+full_name = Base
+description = Base (HTTP)
+tooltip = 🌐 Base (HTTP)\nTarget для ipset-base.txt на 80 порту.
+color = #00ffcc
+default_strategy = none
+ports = 80
+protocol = TCP
+needs_new_separator = true
+command_group = hostlists
+icon_name = fa5b.chrome
+icon_color = #2696F1
+base_filter = --filter-tcp=80 --ipset=ipset-base.txt
+strategy_type = http80
+strip_payload = true
+
+[cloudflare_ipset_tcp]
+full_name = Cloudflare Ipset
 description = Сервера CloudFlare (все порты)
 tooltip = ☁️ Используйте если нужно разблокировать сервера этого ресурса
 color = #ffa500
@@ -769,11 +818,59 @@ needs_new_separator = true
 command_group = ipsets
 icon_name = fa5b.cloudflare
 icon_color = #FFA500
-base_filter = --filter-tcp=80,443-65535 --ipset=cloudflare-ipset.txt --ipset=cloudflare-ipset_v6.txt --ipset=ipset-cloudflare1.txt --ipset=ipset-cloudflare.txt
+base_filter = --filter-tcp=80,443-65535 --ipset=cloudflare-ipset.txt
 strategy_type = tcp
 requires_all_ports = true
 
-[ipset_zapretkvn]
+[cloudflare_ipset_v6_tcp]
+full_name = Cloudflare Ipset V6
+description = Сервера CloudFlare (все порты)
+tooltip = ☁️ Используйте если нужно разблокировать сервера этого ресурса
+color = #ffa500
+default_strategy = none
+ports = all ports
+protocol = TCP
+needs_new_separator = true
+command_group = ipsets
+icon_name = fa5b.cloudflare
+icon_color = #FFA500
+base_filter = --filter-tcp=80,443-65535 --ipset=cloudflare-ipset_v6.txt
+strategy_type = tcp
+requires_all_ports = true
+
+[cloudflare1_tcp]
+full_name = Cloudflare1
+description = Сервера CloudFlare (все порты)
+tooltip = ☁️ Используйте если нужно разблокировать сервера этого ресурса
+color = #ffa500
+default_strategy = none
+ports = all ports
+protocol = TCP
+needs_new_separator = true
+command_group = ipsets
+icon_name = fa5b.cloudflare
+icon_color = #FFA500
+base_filter = --filter-tcp=80,443-65535 --ipset=ipset-cloudflare1.txt
+strategy_type = tcp
+requires_all_ports = true
+
+[cloudflare_tcp]
+full_name = Cloudflare
+description = Сервера CloudFlare (все порты)
+tooltip = ☁️ Используйте если нужно разблокировать сервера этого ресурса
+color = #ffa500
+default_strategy = none
+ports = all ports
+protocol = TCP
+needs_new_separator = true
+command_group = ipsets
+icon_name = fa5b.cloudflare
+icon_color = #FFA500
+base_filter = --filter-tcp=80,443-65535 --ipset=ipset-cloudflare.txt
+strategy_type = tcp
+requires_all_ports = true
+
+[zapretkvn_tcp]
 full_name = ZapretKVN
 description = Сервера ZapretKVN (все порты)
 tooltip = 🐋 Сервера ZapretKVN (все порты)\nОбходит блокировку сервисов ZapretKVN через TCP.\nРаботает когда провайдер блокирует не домены, а конкретные IP.\nПолезно для сервисов ZapretKVN.\n📝 Стратегии применяются ко ВСЕМУ трафику (без фильтра payload)
@@ -790,36 +887,19 @@ strategy_type = tcp
 requires_all_ports = true
 strip_payload = true
 
-[ipset]
-full_name = IPset TCP (Games)
-description = Блокировка по IP адресам (все порты)
-tooltip = 🔢 Блокировка по IP адресам (все порты)\nОбходит блокировку сервисов по их IP адресам через TCP.\nРаботает когда провайдер блокирует не домены, а конкретные IP.\nПолезно для сервисов с фиксированными IP адресами.
+[russia_youtube_rtmps_tcp]
+full_name = Russia YouTube RTMPS
+description = YouTube RTMPS через российский ipset
+tooltip = 🎬 YouTube RTMPS через российский ipset.
 color = #ffa500
 default_strategy = none
 ports = all ports
 protocol = TCP
 needs_new_separator = true
-command_group = ipsets
-icon_name = fa5s.network-wired
-icon_color = #FFA500
-base_filter = --filter-tcp=80,443-65535 --ipset=russia-youtube-rtmps.txt --ipset=ipset-all.txt --ipset=ipset-base.txt --ipset=ipset-discord.txt
-strategy_type = tcp
-requires_all_ports = true
-strip_payload = true
-
-[ipset_all]
-full_name = ALL TCP
-description = Позволяет включить Zapret для всех IP-адресов (без ipset или hostlist)
-tooltip = 🔢 Блокировка по IP адресам (все порты)\nОбходит блокировку сервисов по их IP адресам через TCP.\nРаботает когда провайдер блокирует не домены, а конкретные IP.\nПолезно для сервисов с фиксированными IP адресами.
-color = #ffa500
-default_strategy = none
-ports = all ports
-protocol = TCP
-needs_new_separator = true
-command_group = ipsets
-icon_name = fa5s.network-wired
-icon_color = #FFA500
-base_filter = --filter-tcp=80,443-65535 --ipset-exclude=ipset-ru.txt --ipset-exclude=ipset-dns.txt --ipset-exclude=ipset-exclude.txt
+command_group = youtube
+icon_name = fa5b.youtube
+icon_color = #FF0000
+base_filter = --filter-tcp=80,443-65535 --ipset=russia-youtube-rtmps.txt
 strategy_type = tcp
 requires_all_ports = true
 strip_payload = true
@@ -855,50 +935,3 @@ icon_color = #D49B00
 base_filter = --filter-udp=80,443-65535 --ipset=ipset-all.txt --ipset=ipset-base.txt --ipset=cloudflare-ipset.txt --ipset=cloudflare-ipset_v6.txt --ipset=ipset-cloudflare1.txt --ipset=ipset-cloudflare.txt
 strategy_type = udp
 requires_all_ports = true
-
-[ipset_udp_all]
-full_name = ALL UDP
-description = Позволяет включить Zapret для всех IP-адресов (без ipset или hostlist)
-tooltip = 🔢 Блокировка по IP адресам (UDP для игр)\nОбходит блокировку сервисов по их IP адресам через UDP.\nРаботает когда провайдер блокирует не домены, а конкретные IP.\nПолезно для сервисов с фиксированными IP адресами.
-color = #006eff
-default_strategy = none
-ports = all ports
-protocol = UDP
-needs_new_separator = false
-command_group = ipsets
-icon_name = fa5s.gamepad
-icon_color = #D49B00
-base_filter = --filter-udp=80,443-65535 --ipset-exclude=ipset-ru.txt --ipset-exclude=ipset-dns.txt --ipset-exclude=ipset-exclude.txt
-strategy_type = udp
-requires_all_ports = true
-strip_payload = true
-
-[quic_all]
-full_name = ALL QUIC
-description = Весь QUIC трафик (UDP порт 443) без привязки к доменам или IP
-tooltip = 🌐 Весь QUIC трафик (UDP порт 443)\nОбходит блокировку QUIC/HTTP3 протокола для всех сайтов.\nНе использует hostlist или ipset — работает по exclude-списку.\nПолезно когда провайдер блокирует QUIC протокол целиком.
-color = #00bcd4
-default_strategy = none
-ports = 443
-protocol = QUIC/UDP
-needs_new_separator = true
-command_group = ipsets
-icon_name = fa5s.bolt
-icon_color = #00BCD4
-base_filter = --filter-udp=443 --ipset-exclude=ipset-exclude.txt --ipset-exclude=ipset-ru.txt --ipset-exclude=ipset-dns.txt
-strategy_type = udp
-
-[tcp_all]
-full_name = ALL TCP (80, 443)
-description = Весь TCP трафик (порты 80, 443) без привязки к доменам или IP
-tooltip = 🌐 Весь TCP трафик (порты 80, 443)\nОбходит блокировку TCP для всех сайтов по exclude-списку.\nНе использует hostlist или ipset.\nПолезно когда провайдер блокирует по SNI/HTTP Host для широкого круга сайтов.
-color = #ff9800
-default_strategy = none
-ports = 80, 443
-protocol = TCP
-needs_new_separator = true
-command_group = ipsets
-icon_name = fa5s.globe
-icon_color = #FF9800
-base_filter = --filter-tcp=80,443 --ipset-exclude=ipset-exclude.txt --ipset-exclude=ipset-ru.txt --ipset-exclude=ipset-dns.txt
-strategy_type = tcp

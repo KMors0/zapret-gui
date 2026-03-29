@@ -34,6 +34,11 @@ _DIRECTIVE_PREFIXES = (
     "--cookie",
 )
 
+_DOMAIN_TARGET_ALIASES = {
+    "updates.discord.com": "discord_update",
+    "stable.dl2.discordapp.net": "discord_update",
+}
+
 
 def normalize_text(text: str) -> str:
     return str(text or "").replace("\r\n", "\n").replace("\r", "\n")
@@ -234,7 +239,8 @@ def _base_from_path(value: str, expect_ipset: bool) -> str:
     stem = Path(filename).stem
     if expect_ipset and stem.startswith("ipset-"):
         stem = stem[6:]
-    return stem.strip().lower()
+    stem = re.sub(r"[^0-9a-z]+", "_", stem.strip().lower()).strip("_")
+    return stem
 
 
 def _base_from_domain(value: str) -> str:
@@ -244,6 +250,8 @@ def _base_from_domain(value: str) -> str:
     token = token.replace("*.", "")
     token = token.split("/", 1)[0]
     token = token.split(":", 1)[0]
+    if token in _DOMAIN_TARGET_ALIASES:
+        return _DOMAIN_TARGET_ALIASES[token]
     if "." in token:
         token = token.split(".", 1)[0]
     return re.sub(r"[^0-9a-z]+", "_", token).strip("_")

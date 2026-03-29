@@ -675,7 +675,7 @@ class MainWindowUI:
 
     def _on_direct_mode_changed(self, mode: str):
         """Force rebuild of Прямой запуск page on next show."""
-        page = getattr(self, "zapret2_strategies_page", None)
+        page = self.get_loaded_page(PageName.ZAPRET2_DIRECT)
         if page and hasattr(page, "_strategy_set_snapshot"):
             page._strategy_set_snapshot = None
 
@@ -838,11 +838,35 @@ class MainWindowUI:
     def _auto_start_after_method_switch(self, method: str):
         auto_start_after_main_window_method_switch(self, method)
 
+    def _request_start_dpi(self):
+        handler = getattr(self, "_start_requested_handler", None)
+        if callable(handler):
+            handler()
+            return
+        if hasattr(self, "dpi_controller") and self.dpi_controller:
+            self.dpi_controller.start_dpi_async()
+
+    def _request_stop_dpi(self):
+        if hasattr(self, "dpi_controller") and self.dpi_controller:
+            self.dpi_controller.stop_dpi_async()
+
+    def _request_open_connection_test(self):
+        if hasattr(self, "open_connection_test"):
+            self.open_connection_test()
+
+    def _request_open_folder(self):
+        if hasattr(self, "open_folder"):
+            self.open_folder()
+
     def _proxy_start_click(self):
-        self.home_page.start_btn.click()
+        home_page = self.get_loaded_page(PageName.HOME)
+        if home_page is not None and hasattr(home_page, "start_btn"):
+            home_page.start_btn.click()
 
     def _proxy_stop_click(self):
-        self.home_page.stop_btn.click()
+        home_page = self.get_loaded_page(PageName.HOME)
+        if home_page is not None and hasattr(home_page, "stop_btn"):
+            home_page.stop_btn.click()
 
     def _proxy_stop_and_exit(self):
         from log import log
@@ -854,15 +878,21 @@ class MainWindowUI:
             self._closing_completely = True
             self.dpi_controller.stop_and_exit_async()
         else:
-            self.home_page.stop_btn.click()
+            home_page = self.get_loaded_page(PageName.HOME)
+            if home_page is not None and hasattr(home_page, "stop_btn"):
+                home_page.stop_btn.click()
             from PyQt6.QtWidgets import QApplication
             QApplication.quit()
 
     def _proxy_test_click(self):
-        self.home_page.test_btn.click()
+        home_page = self.get_loaded_page(PageName.HOME)
+        if home_page is not None and hasattr(home_page, "test_btn"):
+            home_page.test_btn.click()
 
     def _proxy_folder_click(self):
-        self.home_page.folder_btn.click()
+        home_page = self.get_loaded_page(PageName.HOME)
+        if home_page is not None and hasattr(home_page, "folder_btn"):
+            home_page.folder_btn.click()
 
     def _open_subscription_dialog(self):
         open_subscription_dialog(self)
@@ -909,7 +939,8 @@ class MainWindowUI:
         except Exception:
             sender = None
 
-        if launch_method == "direct_zapret2" and sender is getattr(self, "zapret2_strategies_page", None):
+        z2_page = self.get_loaded_page(PageName.ZAPRET2_DIRECT)
+        if launch_method == "direct_zapret2" and sender is z2_page:
             display_name = self._get_direct_strategy_summary()
             self.update_current_strategy_display(display_name)
             if hasattr(self, "parent_app"):
@@ -959,13 +990,15 @@ class MainWindowUI:
     def _on_strategy_detail_selected(self, target_key: str, strategy_id: str):
         from log import log
         log(f"Strategy selected from detail: {target_key} = {strategy_id}", "INFO")
-        if hasattr(self, 'zapret2_strategies_page') and hasattr(self.zapret2_strategies_page, 'apply_strategy_selection'):
-            self.zapret2_strategies_page.apply_strategy_selection(target_key, strategy_id)
+        page = self.get_loaded_page(PageName.ZAPRET2_DIRECT)
+        if page and hasattr(page, 'apply_strategy_selection'):
+            page.apply_strategy_selection(target_key, strategy_id)
 
     def _on_strategy_detail_filter_mode_changed(self, target_key: str, filter_mode: str):
         try:
-            if hasattr(self, 'zapret2_strategies_page') and hasattr(self.zapret2_strategies_page, 'apply_filter_mode_change'):
-                self.zapret2_strategies_page.apply_filter_mode_change(target_key, filter_mode)
+            page = self.get_loaded_page(PageName.ZAPRET2_DIRECT)
+            if page and hasattr(page, 'apply_filter_mode_change'):
+                page.apply_filter_mode_change(target_key, filter_mode)
         except Exception:
             pass
 
@@ -983,7 +1016,7 @@ class MainWindowUI:
 
             def _reload_dpi():
                 try:
-                    page = getattr(self, "zapret1_direct_control_page", None)
+                    page = self.get_loaded_page(PageName.ZAPRET1_DIRECT_CONTROL)
                     if page and hasattr(page, "_reload_dpi"):
                         page._reload_dpi()
                 except Exception:
@@ -1003,7 +1036,7 @@ class MainWindowUI:
         from log import log
         log(f"V1 strategy detail selected: {target_key} = {strategy_id}", "INFO")
         # Обновить подписи на странице списка target'ов
-        page = getattr(self, "zapret1_strategies_page", None)
+        page = self.get_loaded_page(PageName.ZAPRET1_DIRECT)
         if page and hasattr(page, "_refresh_subtitles"):
             from PyQt6.QtCore import QTimer
             QTimer.singleShot(100, page._refresh_subtitles)

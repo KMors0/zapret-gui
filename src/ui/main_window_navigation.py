@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from ui.main_window_pages import get_loaded_page
 from ui.page_names import PageName
 
 
@@ -87,14 +88,20 @@ def redirect_to_strategies_page_for_method(window, method: str) -> None:
         current = None
 
     strategies_context_pages = set()
-    for attr in (
-        "dpi_settings_page", "zapret2_user_presets_page", "zapret2_strategies_page",
-        "orchestra_zapret2_user_presets_page", "zapret2_orchestra_strategies_page",
-        "orchestra_zapret2_control_page", "zapret1_direct_control_page",
-        "zapret1_strategies_page", "zapret1_user_presets_page", "strategy_detail_page",
-        "orchestra_strategy_detail_page",
+    for page_name in (
+        PageName.DPI_SETTINGS,
+        PageName.ZAPRET2_USER_PRESETS,
+        PageName.ZAPRET2_DIRECT,
+        PageName.ZAPRET2_ORCHESTRA_USER_PRESETS,
+        PageName.ZAPRET2_ORCHESTRA,
+        PageName.ZAPRET2_ORCHESTRA_CONTROL,
+        PageName.ZAPRET1_DIRECT_CONTROL,
+        PageName.ZAPRET1_DIRECT,
+        PageName.ZAPRET1_USER_PRESETS,
+        PageName.ZAPRET2_STRATEGY_DETAIL,
+        PageName.ZAPRET2_ORCHESTRA_STRATEGY_DETAIL,
     ):
-        page = getattr(window, attr, None)
+        page = get_loaded_page(window, page_name)
         if page is not None:
             strategies_context_pages.add(page)
 

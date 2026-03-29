@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from ui.page_names import PageName
-
 
 def connect_main_window_page_signals(window) -> None:
     """Wire up page signals for MainWindow.
@@ -9,9 +7,6 @@ def connect_main_window_page_signals(window) -> None:
     Kept out of ui.main_window so the window class stays focused on
     composition/navigation instead of event wiring.
     """
-    window.start_clicked = window.home_page.start_btn.clicked
-    window.stop_clicked = window.home_page.stop_btn.clicked
-
     try:
         from core.services import get_preset_store
         store = get_preset_store()

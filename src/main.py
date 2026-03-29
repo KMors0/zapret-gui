@@ -652,7 +652,8 @@ class LupiDPIApp(ZapretFluentWindow, MainWindowUI, ThemeSubscriptionManager):
     def set_status(self, text: str) -> None:
         """Sets the status text."""
         # Обновляем статус на главной странице
-        if hasattr(self, 'home_page'):
+        home_page = get_loaded_page(self, PageName.HOME)
+        if home_page is not None:
             # Определяем тип статуса по тексту
             status_type = "neutral"
             if "работает" in text.lower() or "запущен" in text.lower() or "успешно" in text.lower():
@@ -661,7 +662,7 @@ class LupiDPIApp(ZapretFluentWindow, MainWindowUI, ThemeSubscriptionManager):
                 status_type = "stopped"
             elif "внимание" in text.lower() or "предупреждение" in text.lower():
                 status_type = "warning"
-            self.home_page.set_status(text, status_type)
+            home_page.set_status(text, status_type)
 
     def _register_global_error_notifier(self) -> None:
         """Подключает глобальные ERROR/CRITICAL логи к верхнему InfoBar."""

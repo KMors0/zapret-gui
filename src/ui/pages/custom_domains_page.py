@@ -28,7 +28,7 @@ import os
 
 from .base_page import BasePage, ScrollBlockingPlainTextEdit
 from ui.compat_widgets import SettingsCard, ActionButton, set_tooltip
-from .strategies_page_base import ResetActionButton
+from ui.compat_widgets import ResetActionButton
 from ui.theme import get_theme_tokens
 from ui.text_catalog import tr as tr_catalog
 from log import log

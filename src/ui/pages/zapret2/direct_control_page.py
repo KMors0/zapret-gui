@@ -16,8 +16,7 @@ from PyQt6.QtWidgets import (
 import qtawesome as qta
 
 from ui.pages.base_page import BasePage
-from ui.pages.strategies_page_base import ResetActionButton
-from ui.compat_widgets import ActionButton, PrimaryActionButton, PulsingDot, SettingsCard, SettingsRow, set_tooltip
+from ui.compat_widgets import ActionButton, PrimaryActionButton, PulsingDot, ResetActionButton, SettingsCard, SettingsRow, set_tooltip
 from ui.theme import get_theme_tokens
 from ui.text_catalog import tr as tr_catalog
 

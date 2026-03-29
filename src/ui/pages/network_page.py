@@ -29,7 +29,7 @@ except ImportError:
 from .base_page import BasePage
 from .dpi_settings_page import Win11ToggleRow
 from ui.compat_widgets import SettingsCard, ActionButton
-from ui.pages.strategies_page_base import ResetActionButton
+from ui.compat_widgets import ResetActionButton
 from ui.theme import get_theme_tokens
 from ui.text_catalog import tr as tr_catalog
 from log import log

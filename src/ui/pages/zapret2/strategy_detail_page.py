@@ -53,9 +53,8 @@ except ImportError:
     _HAS_FLUENT = False
 
 from ui.pages.base_page import BasePage
-from ui.compat_widgets import ActionButton, PrimaryActionButton, SettingsRow, set_tooltip, SettingsCard
+from ui.compat_widgets import ActionButton, PrimaryActionButton, ResetActionButton, SettingsRow, set_tooltip, SettingsCard
 from ui.pages.dpi_settings_page import Win11ToggleRow, Win11ComboRow, Win11NumberRow
-from ui.pages.strategies_page_base import ResetActionButton
 from ui.widgets.direct_zapret2_strategies_tree import DirectZapret2StrategiesTree, StrategyTreeRow
 from strategy_menu.args_preview_dialog import ArgsPreviewDialog
 from launcher_common.blobs import get_blobs_info

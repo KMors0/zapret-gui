@@ -117,6 +117,11 @@ class StrategyRunnerBase(ABC):
         Start strategy with custom arguments.
         Must be implemented by subclasses.
 
+        Legacy note:
+        ordinary direct_zapret1/direct_zapret2 launch should prefer
+        `start_from_preset_file()` with an already prepared preset file.
+        This method remains for combined/custom launch paths.
+
         Args:
             custom_args: List of command line arguments
             strategy_name: Strategy name for logs
@@ -136,8 +141,8 @@ class StrategyRunnerBase(ABC):
         """
         Starts strategy directly from existing preset file.
 
-        This is the preferred method for launching DPI in the new architecture
-        where preset files are managed by PresetManager instead of registry.
+        This is the preferred method for launching DPI in the current
+        preset-based direct architecture.
 
         Default implementation reads the file and calls start_strategy_custom.
         Subclasses (like StrategyRunnerV2) may override for more efficient handling.
@@ -181,6 +186,10 @@ class StrategyRunnerBase(ABC):
     def _write_preset_file(self, args: List[str], strategy_name: str) -> str:
         """
         Writes arguments to preset file for loading via @file.
+
+        Legacy note:
+        this mainly serves the old custom/combined args flow.
+        Ordinary direct preset launch should use an already prepared preset file.
 
         Args:
             args: List of command line arguments

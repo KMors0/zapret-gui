@@ -680,8 +680,9 @@ class StrategyRunnerV2(StrategyRunnerBase):
         """
         Starts strategy directly from existing preset file.
 
-        This is the new primary method for launching DPI - it uses an already
-        prepared preset file instead of generating args from registry.
+        This is the primary method for ordinary direct_zapret2 launch - it uses
+        an already prepared preset file instead of generating args from
+        registry/category selections.
 
         Features:
         - Hot-reload support (monitors preset file for changes)
@@ -935,6 +936,11 @@ class StrategyRunnerV2(StrategyRunnerBase):
     def start_strategy_custom(self, custom_args: List[str], strategy_name: str = "Custom Strategy", _retry_count: int = 0) -> bool:
         """
         Starts strategy with arbitrary arguments.
+
+        Legacy note:
+        ordinary direct_zapret2 launch is preset-based and should use
+        `start_from_preset_file()`. This method remains for combined/custom
+        launch scenarios and backward-compatible paths.
 
         V2 features:
         - Hot-reload support

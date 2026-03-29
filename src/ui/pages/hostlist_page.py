@@ -31,7 +31,7 @@ except ImportError:
     _HAS_FLUENT = False
 
 from .base_page import BasePage, ScrollBlockingPlainTextEdit
-from .strategies_page_base import ResetActionButton
+from ui.compat_widgets import ResetActionButton
 from ui.compat_widgets import SettingsCard, ActionButton, set_tooltip
 from ui.theme import get_theme_tokens
 from ui.text_catalog import tr as tr_catalog

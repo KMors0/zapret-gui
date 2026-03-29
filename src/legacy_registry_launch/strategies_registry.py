@@ -280,7 +280,7 @@ def get_target_icon(target_key: str):
     import qtawesome as qta
     
     targets = _get_targets()
-    category = categories.get(target_key)
+    category = targets.get(target_key)
     if category:
         try:
             icon_name = category.icon_name
@@ -345,7 +345,7 @@ class StrategiesRegistry:
                 _imported_types.add(cache_key)
                 log(f"✅ Перезагружено {len(strategies)} стратегий типа '{strategy_type}' (набор: {set_name})", "DEBUG")
 
-        log(f"✅ Перезагрузка завершена, категорий: {len(self._categories)}, типов стратегий: {len(_strategies_cache)}", "INFO")
+        log(f"✅ Перезагрузка завершена, категорий: {len(self._targets)}, типов стратегий: {len(_strategies_cache)}", "INFO")
 
     @property
     def strategies(self) -> Dict[str, Dict]:
@@ -358,18 +358,23 @@ class StrategiesRegistry:
     @property
     def targets(self) -> Dict[str, TargetInfo]:
         """Получение всех категорий"""
-        return self._categories
+        return self._targets
+
+    @property
+    def categories(self) -> Dict[str, TargetInfo]:
+        """Совместимый alias для legacy orchestra UI."""
+        return self._targets
 
     def get_target_strategies(self, target_key: str) -> Dict[str, Any]:
         """Получить стратегии для категории"""
-        target_info = self._categories.get(target_key)
+        target_info = self._targets.get(target_key)
         if not target_info:
             return {}
         return _lazy_import_base_strategies(target_info.strategy_type)
     
     def get_target_info(self, target_key: str) -> Optional[TargetInfo]:
         """Получить информацию о категории"""
-        return self._categories.get(target_key)
+        return self._targets.get(target_key)
 
     def get_strategy_args_safe(self, target_key: str, strategy_id: str) -> Optional[str]:
         """
@@ -485,7 +490,7 @@ class StrategiesRegistry:
         """Получить стратегии по умолчанию для всех категорий"""
         return {
             key: info.default_strategy
-            for key, info in self._categories.items()
+            for key, info in self._targets.items()
         }
     
     def get_none_strategies(self) -> Dict[str, str]:
@@ -493,40 +498,40 @@ class StrategiesRegistry:
         # Теперь для всех категорий используется единая стратегия "none"
         return {
             key: "none"
-            for key in self._categories.keys()
+            for key in self._targets.keys()
         }
 
     def get_all_target_keys(self) -> List[str]:
         """Получить все ключи категорий в порядке сортировки"""
-        return sorted(self._categories.keys(), key=lambda k: self._categories[k].order)
+        return sorted(self._targets.keys(), key=lambda k: self._targets[k].order)
     
     def get_tab_names_dict(self) -> Dict[str, Tuple[str, str]]:
         """Получить словарь имен табов (полное, полное) - для совместимости"""
         return {
             key: (info.full_name, info.full_name)
-            for key, info in self._categories.items()
+            for key, info in self._targets.items()
         }
     
     def get_tab_tooltips_dict(self) -> Dict[str, str]:
         """Получить словарь подсказок для табов"""
         return {
             key: info.tooltip
-            for key, info in self._categories.items()
+            for key, info in self._targets.items()
         }
     
     def get_target_colors_dict(self) -> Dict[str, str]:
         """Получить словарь цветов для target."""
         return {
             key: info.color
-            for key, info in self._categories.items()
+            for key, info in self._targets.items()
         }
 
     def get_all_target_keys_by_command_order(self) -> List[str]:
         """Получить все ключи категорий в порядке командной строки (с кэшем)"""
         if self._sorted_keys_by_command_cache is None:
             self._sorted_keys_by_command_cache = sorted(
-                self._categories.keys(),
-                key=lambda k: self._categories[k].command_order
+                self._targets.keys(),
+                key=lambda k: self._targets[k].command_order
             )
         return self._sorted_keys_by_command_cache
 
@@ -540,8 +545,8 @@ class StrategiesRegistry:
         """
         if self._sorted_keys_cache is None:
             self._sorted_keys_cache = sorted(
-                self._categories.keys(),
-                key=lambda k: self._categories[k].order
+                self._targets.keys(),
+                key=lambda k: self._targets[k].order
             )
         return self._sorted_keys_cache
     

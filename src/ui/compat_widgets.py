@@ -26,10 +26,12 @@ try:
         ToolTipFilter, ToolTipPosition,
     )
     HAS_FLUENT = True
+    _FluentPushButton = PushButton
 except ImportError:
     HAS_FLUENT = False
     ToolTipFilter = None    # type: ignore[assignment,misc]
     ToolTipPosition = None  # type: ignore[assignment,misc]
+    _FluentPushButton = QPushButton  # type: ignore[assignment,misc]
 
 
 # ---------------------------------------------------------------------------
@@ -589,3 +591,28 @@ class InfoBarHelper:
         if HAS_FLUENT:
             InfoBar.info(title, content, duration=duration,
                          position=InfoBarPosition.TOP_RIGHT, parent=parent)
+
+
+class ResetActionButton(_FluentPushButton):
+    """Кнопка с подтверждением через MessageBox."""
+
+    reset_confirmed = pyqtSignal()
+
+    def __init__(self, text: str = "Сбросить", confirm_text: str = "Подтвердить?", parent=None):
+        super().__init__(parent)
+        self._default_text = text
+        self._confirm_text = confirm_text
+        self.setText(text)
+        self.setFixedHeight(32)
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.clicked.connect(self._on_clicked)
+
+    def _on_clicked(self):
+        try:
+            from qfluentwidgets import MessageBox
+
+            box = MessageBox(self._default_text, self._confirm_text, self.window())
+            if box.exec():
+                self.reset_confirmed.emit()
+        except Exception:
+            self.reset_confirmed.emit()

@@ -10,8 +10,7 @@ from PyQt6.QtCore import pyqtSignal, QTimer
 from PyQt6.QtWidgets import QWidget, QHBoxLayout, QVBoxLayout
 
 from ui.pages.base_page import BasePage
-from ui.pages.strategies_page_base import StatusIndicator, ResetActionButton
-from ui.compat_widgets import ActionButton, RefreshButton, SettingsCard
+from ui.compat_widgets import ActionButton, RefreshButton, ResetActionButton, SettingsCard, StatusIndicator
 from ui.widgets import UnifiedStrategiesList
 from ui.widgets.direct_zapret2_strategies_tree import DirectZapret2StrategiesTree, StrategyTreeRow
 from ui.text_catalog import tr as tr_catalog

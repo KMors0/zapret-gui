@@ -423,6 +423,11 @@ class StrategyRunnerV1:
         """
         Starts strategy with arbitrary arguments.
 
+        Legacy note:
+        ordinary direct_zapret1 launch is preset-based and should use
+        `start_from_preset_file()`. This method remains for combined/custom
+        launch scenarios.
+
         Unlike V2:
         - No hot-reload
         - No --lua-* arguments
@@ -608,6 +613,7 @@ class StrategyRunnerV1:
         """
         Starts strategy directly from an existing preset file via @file syntax.
 
+        This is the primary path for ordinary direct_zapret1 launch.
         Unlike the old approach, does NOT re-parse/rewrite the file.
         Preset file must already contain resolved paths (lists/X, bin/X).
         """

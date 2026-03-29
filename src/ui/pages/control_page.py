@@ -21,8 +21,7 @@ except ImportError:
 
 from .base_page import BasePage
 from ui.compat_widgets import SettingsRow, PulsingDot
-from ui.compat_widgets import SettingsCard, ActionButton, PrimaryActionButton, StatusIndicator, set_tooltip
-from ui.pages.strategies_page_base import ResetActionButton
+from ui.compat_widgets import SettingsCard, ActionButton, PrimaryActionButton, ResetActionButton, StatusIndicator, set_tooltip
 from ui.text_catalog import tr as tr_catalog
 
 try:

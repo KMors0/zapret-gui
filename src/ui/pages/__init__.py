@@ -3,7 +3,6 @@
 
 from .home_page import HomePage
 from .control_page import ControlPage
-from .strategies_page_base import StrategiesPageBase
 from .zapret2_orchestra_strategies_page import Zapret2OrchestraStrategiesPage
 from .zapret2 import (
     Zapret2DirectControlPage,
@@ -49,7 +48,6 @@ __all__ = [
     'HomePage',
     'ControlPage',
     'Zapret2OrchestraStrategiesPage',
-    'StrategiesPageBase',
     'Zapret2StrategiesPageNew',  # Новая страница Zapret2 из zapret2/
     'Zapret2DirectControlPage',  # Управление для direct_zapret2 (вкладка внутри "Стратегии")
     'Zapret2PresetDetailPage',  # Подстраница конкретного пресета Z2

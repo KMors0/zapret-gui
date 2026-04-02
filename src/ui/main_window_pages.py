@@ -460,6 +460,13 @@ def connect_lazy_page_signals(window, page_name: PageName, page: QWidget) -> Non
             page.back_clicked,
             window._show_active_zapret2_user_presets_page,
         )
+        if hasattr(page, "navigate_to_root"):
+            connect_signal_once(
+                window,
+                "z2_preset_detail.navigate_to_root",
+                page.navigate_to_root,
+                window._show_active_zapret2_control_page,
+            )
 
     if page_name == PageName.ZAPRET1_PRESET_DETAIL and hasattr(page, "back_clicked"):
         connect_signal_once(
@@ -468,6 +475,13 @@ def connect_lazy_page_signals(window, page_name: PageName, page: QWidget) -> Non
             page.back_clicked,
             lambda: window.show_page(PageName.ZAPRET1_USER_PRESETS),
         )
+        if hasattr(page, "navigate_to_root"):
+            connect_signal_once(
+                window,
+                "z1_preset_detail.navigate_to_root",
+                page.navigate_to_root,
+                lambda: window.show_page(PageName.ZAPRET1_DIRECT_CONTROL),
+            )
     if page_name in (PageName.ZAPRET2_DIRECT_CONTROL, PageName.ZAPRET2_ORCHESTRA_CONTROL):
         presets_target = (
             PageName.ZAPRET2_ORCHESTRA_USER_PRESETS

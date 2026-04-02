@@ -14,7 +14,7 @@ from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel,
     QFrame, QSizePolicy, QPushButton,
 )
-from PyQt6.QtGui import QIcon, QFont, QColor, QPainter
+from PyQt6.QtGui import QIcon, QFont, QColor, QPainter, QPixmap, QTransform
 
 try:
     from qfluentwidgets import (
@@ -228,7 +228,25 @@ class RefreshButton(ActionButton):
             import qtawesome as qta
             from qfluentwidgets import isDarkTheme as _idt
             color = "#cccccc" if _idt() else "#555555"
-            self.setIcon(qta.icon(self._icon_name, color=color, rotated=angle))
+
+            size = self.iconSize()
+            icon_w = max(16, int(size.width()) or 16)
+            icon_h = max(16, int(size.height()) or 16)
+
+            # Рисуем вращение внутри фиксированного холста одного размера,
+            # чтобы иконка не "плавала" по вертикали из-за меняющегося bbox.
+            source = qta.icon(self._icon_name, color=color).pixmap(icon_w, icon_h)
+            rotated = source.transformed(QTransform().rotate(angle), Qt.TransformationMode.SmoothTransformation)
+
+            canvas = QPixmap(icon_w, icon_h)
+            canvas.fill(Qt.GlobalColor.transparent)
+
+            painter = QPainter(canvas)
+            painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform, True)
+            painter.drawPixmap((icon_w - rotated.width()) // 2, (icon_h - rotated.height()) // 2, rotated)
+            painter.end()
+
+            self.setIcon(QIcon(canvas))
         except Exception:
             timer = getattr(self, "_spin_timer", None)
             if timer is not None:

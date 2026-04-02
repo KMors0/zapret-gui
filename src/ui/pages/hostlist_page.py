@@ -8,7 +8,7 @@ from typing import Optional
 from urllib.parse import urlparse
 
 import qtawesome as qta
-from PyQt6.QtCore import QTimer, pyqtSignal
+from PyQt6.QtCore import QSize, QTimer, pyqtSignal
 
 from PyQt6.QtWidgets import (
     QHBoxLayout, QLabel, QSizePolicy, QStackedWidget, QVBoxLayout, QWidget,
@@ -36,6 +36,44 @@ from ui.compat_widgets import SettingsCard, ActionButton, set_tooltip
 from ui.theme import get_theme_tokens
 from ui.text_catalog import tr as tr_catalog
 from log import log
+
+
+class CurrentPanelStackedWidget(QStackedWidget):
+    """QStackedWidget, который берёт высоту у текущей вкладки.
+
+    Обычный QStackedWidget умеет держать sizeHint по самой высокой панели.
+    Для страницы «Листы» это создаёт лишнюю пустую зону снизу на коротких
+    вкладках, потому что одна из соседних панелей заметно выше остальных.
+    """
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.currentChanged.connect(self._refresh_geometry)
+
+    def sizeHint(self) -> QSize:  # noqa: N802
+        current = self.currentWidget()
+        if current is not None:
+            try:
+                hint = current.sizeHint()
+                if hint.isValid():
+                    return hint
+            except Exception:
+                pass
+        return super().sizeHint()
+
+    def minimumSizeHint(self) -> QSize:  # noqa: N802
+        current = self.currentWidget()
+        if current is not None:
+            try:
+                hint = current.minimumSizeHint()
+                if hint.isValid():
+                    return hint
+            except Exception:
+                pass
+        return super().minimumSizeHint()
+
+    def _refresh_geometry(self, _index: int) -> None:
+        self.updateGeometry()
 
 
 class HostlistPage(BasePage):
@@ -129,10 +167,10 @@ class HostlistPage(BasePage):
             self.pivot = None
 
         # Stacked panels
-        self.stacked = QStackedWidget(self)
+        self.stacked = CurrentPanelStackedWidget(self)
         self.stacked.setSizePolicy(
             self.stacked.sizePolicy().horizontalPolicy(),
-            QSizePolicy.Policy.Expanding,
+            QSizePolicy.Policy.Preferred,
         )
 
         panel_hostlist = self._build_hostlist_panel()       # index 0
@@ -166,6 +204,7 @@ class HostlistPage(BasePage):
             keys = ["hostlist", "ipset", "domains", "ips", "exclusions"]
             if 0 <= index < len(keys):
                 self.pivot.setCurrentItem(keys[index])
+        self._refresh_stacked_geometry()
         # Lazy-load editors on first visit
         if index == 2 and not self._domains_loaded:
             self._domains_loaded = True
@@ -176,6 +215,16 @@ class HostlistPage(BasePage):
         elif index == 4 and not self._excl_loaded:
             self._excl_loaded = True
             QTimer.singleShot(0, self._load_exclusions)
+
+    def _refresh_stacked_geometry(self) -> None:
+        self.stacked.updateGeometry()
+        current = self.stacked.currentWidget()
+        if current is not None:
+            current.updateGeometry()
+            current.adjustSize()
+        self.content.updateGeometry()
+        self.content.adjustSize()
+        self.updateGeometry()
 
     # ──────────────────────────────────────────────────────────────────────────
     # Panel builders

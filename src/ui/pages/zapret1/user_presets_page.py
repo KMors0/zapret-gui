@@ -422,8 +422,10 @@ class _LinkedWheelListView(ListView):
         at_bottom = scrollbar.value() >= scrollbar.maximum()
 
         if (delta > 0 and at_top) or (delta < 0 and at_bottom):
-            # Let parent scroll area handle wheel at boundaries.
-            e.ignore()
+            # User presets pages use the inner list as the single source of scrolling.
+            # Do not bubble wheel events to BasePage, otherwise the outer page starts
+            # scrolling too and we get a confusing double-scroll behavior.
+            e.accept()
             return
 
         super().wheelEvent(e)
@@ -1673,6 +1675,12 @@ class Zapret1UserPresetsPage(BasePage):
     def _build_ui(self):
         tokens = get_theme_tokens()
         semantic = get_semantic_palette(tokens.theme_name)
+
+        # This page should scroll only inside the presets list.
+        # The outer BasePage scroll creates a second scrollbar and makes wheel
+        # scrolling jump between two containers.
+        self.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.verticalScrollBar().hide()
 
         # Presets community link
         configs_card = SettingsCard()

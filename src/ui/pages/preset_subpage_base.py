@@ -131,6 +131,7 @@ class _RenameDialog(MessageBoxBase):
 
 class PresetSubpageBase(BasePage):
     back_clicked = pyqtSignal()
+    navigate_to_root = pyqtSignal()
 
     def __init__(self, parent=None):
         super().__init__(self._default_title(), "", parent)
@@ -162,6 +163,40 @@ class PresetSubpageBase(BasePage):
         if method == "direct_zapret1":
             return "preset_zapret1"
         return None
+
+    def _breadcrumb_root_text(self) -> str:
+        return "Управление"
+
+    def _breadcrumb_parent_text(self) -> str:
+        if self._is_orchestra_preset_backend():
+            return "Пресеты Оркестра"
+        return "Мои пресеты"
+
+    def _breadcrumb_current_text(self) -> str:
+        return self._preset_name or self._default_title()
+
+    def _rebuild_breadcrumb(self) -> None:
+        breadcrumb = getattr(self, "_breadcrumb", None)
+        if breadcrumb is None:
+            return
+        try:
+            breadcrumb.blockSignals(True)
+            breadcrumb.clear()
+            breadcrumb.addItem("root", self._breadcrumb_root_text())
+            breadcrumb.addItem("list", self._breadcrumb_parent_text())
+            breadcrumb.addItem("detail", self._breadcrumb_current_text())
+        finally:
+            try:
+                breadcrumb.blockSignals(False)
+            except Exception:
+                pass
+
+    def _on_breadcrumb_item_changed(self, key: str) -> None:
+        self._rebuild_breadcrumb()
+        if key == "root":
+            self.navigate_to_root.emit()
+        elif key == "list":
+            self.back_clicked.emit()
 
     def _get_direct_facade(self):
         method = self._direct_launch_method()
@@ -213,16 +248,35 @@ class PresetSubpageBase(BasePage):
             return False
 
     def _build_ui(self) -> None:
+        try:
+            self.title_label.hide()
+        except Exception:
+            pass
+        try:
+            if self.subtitle_label is not None:
+                self.subtitle_label.hide()
+        except Exception:
+            pass
+
+        self._breadcrumb = None
         top_row = QWidget(self)
         top_layout = QHBoxLayout(top_row)
         top_layout.setContentsMargins(0, 0, 0, 0)
         top_layout.setSpacing(8)
 
-        self.backButton = TransparentPushButton(self)
-        self.backButton.setText("Назад к списку")
-        self.backButton.setIcon(_fluent_icon("LEFT_ARROW"))
-        self.backButton.clicked.connect(self.back_clicked.emit)
-        top_layout.addWidget(self.backButton, 0)
+        try:
+            from qfluentwidgets import BreadcrumbBar as _BreadcrumbBar
+
+            self._breadcrumb = _BreadcrumbBar(self)
+            self._rebuild_breadcrumb()
+            self._breadcrumb.currentItemChanged.connect(self._on_breadcrumb_item_changed)
+            top_layout.addWidget(self._breadcrumb, 1)
+        except Exception:
+            self.backButton = TransparentPushButton(self)
+            self.backButton.setText("Назад к списку")
+            self.backButton.setIcon(_fluent_icon("LEFT_ARROW"))
+            self.backButton.clicked.connect(self.back_clicked.emit)
+            top_layout.addWidget(self.backButton, 0)
         top_layout.addStretch(1)
 
         self.menuButton = TransparentToolButton(_fluent_icon("MENU"), self)
@@ -295,7 +349,7 @@ class PresetSubpageBase(BasePage):
             self._save_file()
 
     def _refresh_header(self) -> None:
-        self.title_label.setText(self._preset_name or self._default_title())
+        self._rebuild_breadcrumb()
         active_name = self._current_selected_name()
         active_file_name = self._current_selected_file_name()
         is_active = False

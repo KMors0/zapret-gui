@@ -17,6 +17,7 @@ from ui.text_catalog import tr as tr_catalog
 try:
     from qfluentwidgets import (
         BodyLabel, CaptionLabel, ColorPickerButton, setThemeColor,
+        ColorDialog,
         CheckBox, SegmentedWidget, RadioButton, Slider, ComboBox,
     )
     _HAS_FLUENT_LABELS = True
@@ -29,6 +30,7 @@ except ImportError:
         QComboBox as ComboBox,
     )
     SegmentedWidget = None
+    ColorDialog = None
     _HAS_FLUENT_LABELS = False
     _HAS_COLOR_PICKER = False
 
@@ -559,6 +561,11 @@ class AppearancePage(BasePage):
                 QColor("#0078d4"),
                 tr_catalog("page.appearance.accent.color.pick", language=self._ui_language, default="Выбрать цвет"),
             )
+            try:
+                self._color_picker_btn.clicked.disconnect()
+                self._color_picker_btn.clicked.connect(self._show_accent_color_dialog)
+            except Exception:
+                pass
             self._color_picker_btn.colorChanged.connect(self._on_accent_color_changed)
             accent_row.set_control(self._color_picker_btn)
             accent_layout.addWidget(accent_row)
@@ -618,6 +625,35 @@ class AppearancePage(BasePage):
 
             accent_card.add_layout(accent_layout)
             self.add_widget(accent_card)
+
+    def _show_accent_color_dialog(self) -> None:
+        """Открывает fluent-диалог выбора цвета с нормальным русским заголовком."""
+        if self._color_picker_btn is None or ColorDialog is None:
+            return
+        try:
+            title = tr_catalog(
+                "page.appearance.accent.color.pick",
+                language=self._ui_language,
+                default="Выбрать цвет",
+            )
+            dialog = ColorDialog(
+                QColor(self._color_picker_btn.color),
+                title,
+                self.window(),
+                False,
+            )
+
+            def _apply_color(color: QColor) -> None:
+                try:
+                    self._color_picker_btn.setColor(color)
+                    self._color_picker_btn.colorChanged.emit(color)
+                except Exception:
+                    pass
+
+            dialog.colorChanged.connect(_apply_color)
+            dialog.exec()
+        except Exception:
+            pass
 
             self.add_spacing(16)
             self._load_accent_color()

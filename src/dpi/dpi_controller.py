@@ -750,8 +750,9 @@ class DPIController:
             text = "Не удалось запустить DPI"
 
         try:
-            if hasattr(self.app, "show_dpi_launch_error"):
-                self.app.show_dpi_launch_error(text)
+            controller = getattr(self.app, "window_notification_controller", None)
+            if controller is not None:
+                controller.show_launch_error(text)
         except Exception as e:
             log(f"Не удалось показать InfoBar ошибки запуска: {e}", "DEBUG")
 
@@ -768,8 +769,9 @@ class DPIController:
             return
 
         try:
-            if hasattr(self.app, "show_dpi_launch_warning"):
-                self.app.show_dpi_launch_warning(text)
+            controller = getattr(self.app, "window_notification_controller", None)
+            if controller is not None:
+                controller.show_launch_warning(text)
         except Exception as e:
             log(f"Не удалось показать InfoBar предупреждения запуска: {e}", "DEBUG")
 

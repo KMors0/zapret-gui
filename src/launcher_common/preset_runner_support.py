@@ -290,16 +290,19 @@ def notify_ui_launch_error(message: str) -> None:
             return
 
         target = app.activeWindow()
-        if target is None or not hasattr(target, "show_dpi_launch_error"):
+        if target is None or not hasattr(target, "window_notification_controller"):
             for widget in app.topLevelWidgets():
-                if hasattr(widget, "show_dpi_launch_error"):
+                if hasattr(widget, "window_notification_controller"):
                     target = widget
                     break
 
-        if target is not None and hasattr(target, "show_dpi_launch_error"):
+        if target is not None and hasattr(target, "window_notification_controller"):
+            controller = getattr(target, "window_notification_controller", None)
+            if controller is None:
+                return
             QMetaObject.invokeMethod(
-                target,
-                "show_dpi_launch_error",
+                controller,
+                "show_launch_error",
                 Qt.ConnectionType.QueuedConnection,
                 Q_ARG(str, text),
             )

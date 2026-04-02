@@ -130,7 +130,12 @@ class DirectPresetService:
                 filter_mode=self._detect_filter_mode(profile),
                 selector_family=self._selector_family(profile, target_key),
                 selector_value=self._selector_value(profile, target_key),
-                strategy_candidates=tuple(self._candidate_catalog_names(profile.protocol_kind)),
+                strategy_candidates=tuple(
+                    self._candidate_catalog_names(
+                        metadata.strategy_type,
+                        profile.protocol_kind,
+                    )
+                ),
                 related_profiles=tuple(related_profiles.get(target_key, [])),
                 metadata=metadata,
             )
@@ -554,14 +559,21 @@ class DirectPresetService:
             strategy_lookup_cache=strategy_lookup_cache,
         )
 
-    def _candidate_catalog_names(self, protocol_kind: str) -> tuple[str, ...]:
+    def _candidate_catalog_names(self, strategy_type: str, protocol_kind: str) -> tuple[str, ...]:
+        normalized_type = str(strategy_type or "").strip().lower()
+        if normalized_type == "discord_voice":
+            return ("voice",)
+        if normalized_type in {"tcp", "udp", "http80"}:
+            return (normalized_type,)
+
+        normalized_protocol = str(protocol_kind or "").strip().lower()
         if self._engine == "winws2":
-            if protocol_kind in ("udp", "l7"):
-                return ("udp", "voice")
-            return ("tcp", "http80", "voice")
-        if protocol_kind in ("udp", "l7"):
-            return ("udp", "voice", "http80")
-        return ("tcp", "http80", "voice")
+            if normalized_protocol in ("udp", "l7"):
+                return ("udp",)
+            return ("tcp",)
+        if normalized_protocol in ("udp", "l7"):
+            return ("udp",)
+        return ("tcp",)
 
     def _strategy_catalogs(self) -> dict[str, dict[str, StrategyEntry]]:
         return load_strategy_catalogs(self._paths, self._engine)

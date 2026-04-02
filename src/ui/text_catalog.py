@@ -4740,8 +4740,8 @@ TEXTS: dict[str, dict[str, str]] = {
         "en": "Control",
     },
     "page.z2_strategy_detail.breadcrumb.strategies": {
-        "ru": "Стратегии DPI",
-        "en": "DPI strategies",
+        "ru": "Прямой запуск Zapret 2",
+        "en": "Direct launch Zapret 2",
     },
     "page.z2_strategy_detail.header.category_fallback": {
         "ru": "Target",
@@ -4752,8 +4752,8 @@ TEXTS: dict[str, dict[str, str]] = {
         "en": "Select a target",
     },
     "page.z2_strategy_detail.back.strategies": {
-        "ru": "Стратегии DPI",
-        "en": "DPI strategies",
+        "ru": "Прямой запуск Zapret 2",
+        "en": "Direct launch Zapret 2",
     },
     "page.z2_strategy_detail.toggle.enable.title": {
         "ru": "Включить обход",

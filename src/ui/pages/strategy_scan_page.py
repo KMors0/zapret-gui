@@ -19,6 +19,7 @@ from PyQt6.QtGui import QFont, QColor, QAction
 from PyQt6.QtWidgets import QWidget, QHBoxLayout, QLabel, QHeaderView, QMenu
 
 from ui.pages.base_page import BasePage, ScrollBlockingTextEdit
+from ui.support_request_actions import prepare_strategy_scan_support_request
 from ui.text_catalog import tr as tr_catalog
 
 try:
@@ -168,6 +169,8 @@ class StrategyScanPage(BasePage):
         self._games_scope_label: QLabel | None = None
         self._games_scope_combo = None
         self._udp_scope_hint_label: QLabel | None = None
+        self._prepare_support_btn = None
+        self._support_status_label = None
 
         self._build_ui()
         self._connect_theme()
@@ -412,7 +415,19 @@ class StrategyScanPage(BasePage):
         self._expand_log_btn.setFixedWidth(120)
         self._expand_log_btn.clicked.connect(self._toggle_log_expand)
         log_header = QHBoxLayout()
+        self._support_status_label = CaptionLabel("") if HAS_FLUENT else QLabel("")
+        self._support_status_label.setWordWrap(True)
+        log_header.addWidget(self._support_status_label, 1)
         log_header.addStretch()
+        self._prepare_support_btn = ActionButton(
+            tr_catalog(
+                "page.strategy_scan.prepare_support",
+                default="Подготовить обращение",
+            ),
+            icon_name="fa5b.github",
+        )
+        self._prepare_support_btn.clicked.connect(self._prepare_support_from_strategy_scan)
+        log_header.addWidget(self._prepare_support_btn)
         log_header.addWidget(self._expand_log_btn)
         self._log_card.add_layout(log_header)
 
@@ -1159,6 +1174,7 @@ class StrategyScanPage(BasePage):
             self._table.setRowCount(0)
             self._result_rows.clear()
             self._log_edit.clear()
+        self._set_support_status("")
 
         self._scan_target = target
         self._scan_protocol = scan_protocol
@@ -1337,6 +1353,12 @@ class StrategyScanPage(BasePage):
                 tr_catalog("page.strategy_scan.error", default="Ошибка сканирования")
             )
             self._append_run_log("ERROR: Strategy scan execution failed")
+            self._set_support_status(
+                tr_catalog(
+                    "page.strategy_scan.support_ready_after_error",
+                    default="Можно подготовить обращение по логам ошибки",
+                )
+            )
             return
 
         total_available = max(0, int(getattr(report, "total_available", 0) or 0))
@@ -1389,6 +1411,12 @@ class StrategyScanPage(BasePage):
         self._status_label.setText(status)
         self._progress_bar.setValue(min(total, self._progress_bar.maximum()))
         self._append_run_log(f"\n{status}")
+        self._set_support_status(
+            tr_catalog(
+                "page.strategy_scan.support_ready",
+                default="Можно подготовить обращение по этому сканированию",
+            )
+        )
 
         try:
             if report.baseline_accessible:
@@ -1601,6 +1629,61 @@ class StrategyScanPage(BasePage):
         if self._quick_domain_btn is not None:
             self._quick_domain_btn.setEnabled(True)
 
+    def _set_support_status(self, text: str) -> None:
+        if self._support_status_label is None:
+            return
+        self._support_status_label.setText(str(text or "").strip())
+
+    def _prepare_support_from_strategy_scan(self) -> None:
+        scan_protocol = self._scan_protocol or self._scan_protocol_from_combo()
+        target = self._scan_target or self._normalize_target_input(
+            self._target_input.text(),
+            scan_protocol,
+        )
+        if not target:
+            target = self._default_target_for_protocol(scan_protocol)
+
+        protocol_label = self._protocol_combo.currentText() if self._protocol_combo is not None else scan_protocol
+        mode_label = self._mode_combo.currentText() if self._mode_combo is not None else self._scan_mode
+
+        try:
+            feedback = prepare_strategy_scan_support_request(
+                run_log_file=str(self._run_log_file) if self._run_log_file is not None else None,
+                target=target,
+                protocol_label=protocol_label,
+                mode_label=mode_label,
+                resume_state_path=self._resume_state_path(),
+                scan_protocol=scan_protocol,
+            )
+            result = feedback.result
+            if result.zip_path:
+                logger.info("Prepared Strategy Scan support archive: %s", result.zip_path)
+
+            self._set_support_status(feedback.status_text)
+
+            try:
+                InfoBarHelper.success(
+                    self.window(),
+                    tr_catalog(
+                        "page.strategy_scan.support_prepared_title",
+                        default="Обращение подготовлено",
+                    ),
+                    feedback.info_text,
+                )
+            except Exception:
+                pass
+        except Exception as exc:
+            logger.warning("Failed to prepare strategy-scan support bundle: %s", exc)
+            self._set_support_status("Ошибка подготовки")
+            try:
+                InfoBarHelper.warning(
+                    self.window(),
+                    tr_catalog("page.strategy_scan.error", default="Ошибка сканирования"),
+                    f"Не удалось подготовить обращение:\n{exc}",
+                )
+            except Exception:
+                pass
+
     # ------------------------------------------------------------------
     # Language
     # ------------------------------------------------------------------
@@ -1633,6 +1716,14 @@ class StrategyScanPage(BasePage):
             self._stop_btn.setText(
                 tr_catalog("page.strategy_scan.stop", language=language,
                            default="Остановить"))
+            if self._prepare_support_btn is not None:
+                self._prepare_support_btn.setText(
+                    tr_catalog(
+                        "page.strategy_scan.prepare_support",
+                        language=language,
+                        default="Подготовить обращение",
+                    )
+                )
             self._protocol_combo.setItemText(
                 0,
                 tr_catalog("page.strategy_scan.protocol_tcp", language=language, default="TCP/HTTPS"),

@@ -77,14 +77,14 @@ class DirectZapret2StrategiesTree(QTreeWidget):
         self.setHeaderHidden(True)
         self.setRootIsDecorated(False)
         self.setIndentation(0)
-        self.setUniformRowHeights(True)
+        self.setUniformRowHeights(False)
         self.setTextElideMode(Qt.TextElideMode.ElideRight)
         self.setSelectionMode(QTreeWidget.SelectionMode.SingleSelection)
         self.setSelectionBehavior(QTreeWidget.SelectionBehavior.SelectRows)
         self.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self.setContextMenuPolicy(Qt.ContextMenuPolicy.DefaultContextMenu)
         self.setMouseTracking(True)
-        self.setIconSize(QSize(14, 14))
+        self.setIconSize(QSize(16, 16))
 
         # Use internal scrolling (more reliable than growing-by-height inside BasePage/QScrollArea).
         self.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
@@ -94,7 +94,7 @@ class DirectZapret2StrategiesTree(QTreeWidget):
         # Avoid a huge sizeHint based on all rows; we want a stable viewport + internal scrollbar.
         self.setSizeAdjustPolicy(QAbstractScrollArea.SizeAdjustPolicy.AdjustIgnored)
         # Larger viewport: strategy lists are long, so give the tree more room by default.
-        self.setMinimumHeight(1000)
+        self.setMinimumHeight(520)
 
         header = self.header()
         header.setSectionResizeMode(0, header.ResizeMode.Fixed)
@@ -102,8 +102,8 @@ class DirectZapret2StrategiesTree(QTreeWidget):
         self._star_col_w = 45
         self.setColumnWidth(0, self._star_col_w)
 
-        self._row_height = 28
-        self._section_height = 26
+        self._row_height = 31
+        self._section_height = 22
 
         self._tokens = get_theme_tokens()
         self._applying_theme_styles = False
@@ -134,9 +134,14 @@ class DirectZapret2StrategiesTree(QTreeWidget):
         self._geom_timer.setSingleShot(True)
         self._geom_timer.timeout.connect(self._propagate_geometry_change)
 
-        self._fav_root = self._add_section("★ Избранные")
+        self._show_favorites_root_title = True
+        self._show_all_root_title = False
+        self._fav_root_title = "Избранные"
+        self._all_root_title = "Все стратегии"
+        self._fav_root = self._add_section(self._fav_root_title)
         self._all_root_default_title = "Все стратегии"
         self._all_root = self._add_section(self._all_root_default_title)
+        self._refresh_section_headers()
 
         self.itemClicked.connect(self._on_item_clicked)
 
@@ -206,8 +211,45 @@ class DirectZapret2StrategiesTree(QTreeWidget):
                     self._all_root.setForeground(0, section_brush)
             except Exception:
                 pass
+            self._refresh_section_headers()
         finally:
             self._applying_theme_styles = False
+
+    def _set_section_header_state(self, root: QTreeWidgetItem, title: str, visible: bool) -> None:
+        text = title if visible else ""
+        # Do not use a true zero-height row here: with QTreeWidget that can break
+        # viewport height calculation and make the whole list appear empty.
+        height = self._section_height if visible else 1
+        root.setText(0, text)
+        root.setSizeHint(0, QSize(0, height))
+        root.setSizeHint(1, QSize(0, height))
+
+    def _refresh_section_headers(self) -> None:
+        try:
+            fav_has_rows = any(not self._fav_root.child(i).isHidden() for i in range(self._fav_root.childCount()))
+        except Exception:
+            fav_has_rows = False
+        try:
+            all_has_rows = any(not self._all_root.child(i).isHidden() for i in range(self._all_root.childCount()))
+        except Exception:
+            all_has_rows = False
+
+        try:
+            self._set_section_header_state(
+                self._fav_root,
+                self._fav_root_title,
+                bool(self._show_favorites_root_title and fav_has_rows),
+            )
+        except Exception:
+            pass
+        try:
+            self._set_section_header_state(
+                self._all_root,
+                self._all_root_title,
+                bool(self._show_all_root_title and all_has_rows),
+            )
+        except Exception:
+            pass
 
     def changeEvent(self, event):  # noqa: N802 (Qt override)
         try:
@@ -275,10 +317,10 @@ class DirectZapret2StrategiesTree(QTreeWidget):
         title = self._all_root_default_title
         if key:
             title = f"{title} ({key})"
+        self._all_root_title = title
 
         try:
-            if self._all_root.text(0) != title:
-                self._all_root.setText(0, title)
+            self._refresh_section_headers()
         except Exception:
             pass
 
@@ -420,26 +462,46 @@ class DirectZapret2StrategiesTree(QTreeWidget):
         if is_working not in (True, False, None):
             is_working = None
 
-        tokens = self._tokens or get_theme_tokens("Темная синяя")
+        try:
+            tokens = get_theme_tokens()
+            self._tokens = tokens
+        except Exception:
+            tokens = self._tokens or get_theme_tokens("Темная синяя")
         semantic = get_semantic_palette(tokens.theme_name)
         accent_r, accent_g, accent_b = tokens.accent_rgb
 
-        r = options.rect.adjusted(4, 2, -4, -2)
+        r = options.rect.adjusted(4, 1, -4, -1)
 
         # Base tint (working/broken)
         base_bg = None
         if is_working is True:
             success_tint = QColor(semantic.success)
-            success_tint.setAlpha(64)
+            success_tint.setAlpha(42)
             base_bg = success_tint
         elif is_working is False:
             error_tint = QColor(semantic.error)
-            error_tint.setAlpha(64)
+            error_tint.setAlpha(42)
             base_bg = error_tint
 
-        # Hover tint: show a light accent even for non-active rows.
-        # Keep it noticeably lighter than the active selection fill (alpha 34).
-        hover_bg = QColor(accent_r, accent_g, accent_b, 18) if is_hover and not is_active else None
+        hover_bg = None
+        try:
+            if is_hover and not is_active:
+                hover_bg = to_qcolor(tokens.accent_soft_bg, tokens.accent_hex)
+                if hover_bg.alpha() <= 0:
+                    hover_bg.setAlpha(14)
+                else:
+                    hover_bg.setAlpha(max(8, min(hover_bg.alpha(), 16)))
+        except Exception:
+            hover_bg = QColor(accent_r, accent_g, accent_b, 8) if is_hover and not is_active else None
+
+        selected_bg = None
+        if is_active:
+            try:
+                selected_bg = to_qcolor(tokens.accent_soft_bg, tokens.surface_bg_hover)
+                if selected_bg.alpha() <= 0:
+                    selected_bg.setAlpha(76)
+            except Exception:
+                selected_bg = QColor(accent_r, accent_g, accent_b, 24)
 
         painter.save()
         painter.setRenderHint(painter.RenderHint.Antialiasing, True)
@@ -454,24 +516,10 @@ class DirectZapret2StrategiesTree(QTreeWidget):
             painter.setBrush(QBrush(hover_bg))
             painter.drawRoundedRect(r, 6, 6)
 
-        if is_active:
-            # Ensure active selection is always visible, even on top of working/broken tint.
-            sel_bg = QColor(accent_r, accent_g, accent_b, 34)
+        if selected_bg is not None:
             painter.setPen(Qt.PenStyle.NoPen)
-            painter.setBrush(QBrush(sel_bg))
+            painter.setBrush(QBrush(selected_bg))
             painter.drawRoundedRect(r, 6, 6)
-
-            pen = QPen(QColor(accent_r, accent_g, accent_b, 140))
-            pen.setWidth(1)
-            painter.setPen(pen)
-            painter.setBrush(Qt.BrushStyle.NoBrush)
-            painter.drawRoundedRect(r, 6, 6)
-
-            # Left accent bar
-            bar = r.adjusted(0, 2, -(r.width() - 2), -2)
-            painter.setPen(Qt.PenStyle.NoPen)
-            painter.setBrush(QBrush(QColor(accent_r, accent_g, accent_b, 220)))
-            painter.drawRoundedRect(bar, 2, 2)
 
         painter.restore()
 
@@ -510,6 +558,7 @@ class DirectZapret2StrategiesTree(QTreeWidget):
         self._all_root.setHidden(True)
         self._insert_counter = 0
         self._active_strategy_id = "none"
+        self._refresh_section_headers()
         self._update_height_to_contents()
 
     def has_rows(self) -> bool:
@@ -838,6 +887,12 @@ class DirectZapret2StrategiesTree(QTreeWidget):
     def get_strategy_ids(self) -> list[str]:
         return list(self._rows.keys())
 
+    def total_strategy_count(self) -> int:
+        return len(self._rows)
+
+    def visible_strategy_count(self) -> int:
+        return sum(1 for item in self._rows.values() if not item.isHidden())
+
     def set_working_state(self, strategy_id: str, is_working: Optional[bool]) -> None:
         item = self._rows.get(strategy_id)
         if not item:
@@ -981,6 +1036,7 @@ class DirectZapret2StrategiesTree(QTreeWidget):
         all_visible = any(not self._all_root.child(i).isHidden() for i in range(self._all_root.childCount()))
         self._fav_root.setHidden(not fav_visible)
         self._all_root.setHidden(not all_visible)
+        self._refresh_section_headers()
 
         self.expandItem(self._fav_root)
         self.expandItem(self._all_root)

@@ -60,6 +60,12 @@ _EXTENSION_LUA_INITS: dict[str, set[str]] = {
         "hostfakesplit_multi", "hostfakesplit_gradual",
         "hostfakesplit_decoy",
     },
+    "lua/fakemultisplit.lua": {
+        "fakemultisplit",
+    },
+    "lua/fakemultidisorder.lua": {
+        "fakemultidisorder",
+    },
 }
 
 _LUA_DESYNC_FUNC_RE = re.compile(r"--lua-desync=([a-z_]+)")

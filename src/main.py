@@ -1,7 +1,6 @@
 # main.py
 import sys, os
 import time as _startup_clock
-from collections import deque
 from ui.page_names import PageName
 
 
@@ -143,7 +142,7 @@ _preload_slow_modules()
 # ──────────────────────────────────────────────────────────────
 import subprocess, time
 
-from PyQt6.QtCore    import QTimer, QEvent, Qt, QCoreApplication, pyqtSlot, QMetaObject, Q_ARG
+from PyQt6.QtCore    import QTimer, QEvent, Qt, QCoreApplication
 from PyQt6.QtWidgets import QMessageBox, QWidget, QApplication
 
 os.environ["QT_AUTO_SCREEN_SCALE_FACTOR"] = "1"
@@ -275,7 +274,10 @@ _install_qfluent_label_ctor_compat()
 
 from ui.main_window import MainWindowUI
 from ui.fluent_app_window import ZapretFluentWindow
+from ui.window_close_controller import WindowCloseController
 from ui.holiday_effects import HolidayEffectsManager
+from ui.window_geometry_controller import WindowGeometryController
+from ui.window_notification_controller import WindowNotificationController
 from ui.main_window_state import MainWindowStateStore
 
 
@@ -363,6 +365,11 @@ class LupiDPIApp(ZapretFluentWindow, MainWindowUI, ThemeSubscriptionManager):
 
     def closeEvent(self, event):
         """Обрабатывает событие закрытия окна"""
+        close_controller = getattr(self, "window_close_controller", None)
+        if close_controller is not None:
+            if not close_controller.should_continue_final_close(event):
+                return
+
         self._is_exiting = True
 
         try:
@@ -373,7 +380,9 @@ class LupiDPIApp(ZapretFluentWindow, MainWindowUI, ThemeSubscriptionManager):
         
         # ✅ Гарантированно сохраняем геометрию/состояние окна при выходе
         try:
-            self._persist_window_geometry_now(force=True)
+            geometry_controller = getattr(self, "window_geometry_controller", None)
+            if geometry_controller is not None:
+                geometry_controller.persist_now(force=True)
         except Exception as e:
             log(f"Ошибка сохранения геометрии окна при закрытии: {e}", "❌ ERROR")
         
@@ -519,7 +528,9 @@ class LupiDPIApp(ZapretFluentWindow, MainWindowUI, ThemeSubscriptionManager):
 
         # Сохраняем геометрию/состояние окна сразу (без debounce).
         try:
-            self._persist_window_geometry_now(force=True)
+            geometry_controller = getattr(self, "window_geometry_controller", None)
+            if geometry_controller is not None:
+                geometry_controller.persist_now(force=True)
         except Exception as e:
             log(f"Ошибка сохранения геометрии окна при request_exit: {e}", "DEBUG")
 
@@ -572,98 +583,6 @@ class LupiDPIApp(ZapretFluentWindow, MainWindowUI, ThemeSubscriptionManager):
         except Exception:
             pass
 
-    def restore_window_geometry(self):
-        """Восстанавливает сохраненную позицию и размер окна"""
-        self._geometry_restore_in_progress = True
-        try:
-            from config import get_window_position, get_window_size, get_window_maximized, WIDTH, HEIGHT
-
-            min_width = MIN_WIDTH
-            min_height = 400
-
-            # Сначала читаем maximize-флаг: он нужен для валидации legacy-геометрии.
-            saved_maximized = bool(get_window_maximized())
-
-            screen_geometry = QApplication.primaryScreen().availableGeometry()
-            screens = QApplication.screens()
-
-            def _looks_like_legacy_maximized_geometry(width: int, height: int) -> bool:
-                """Определяет старую некорректную normal-геометрию (сохранена как fullscreen)."""
-                if not saved_maximized:
-                    return False
-                for screen in screens:
-                    rect = screen.availableGeometry()
-                    if width >= (rect.width() - 4) and height >= (rect.height() - 4):
-                        return True
-                return False
-
-            # Размер
-            saved_size = get_window_size()
-            if saved_size:
-                width, height = saved_size
-                if _looks_like_legacy_maximized_geometry(width, height):
-                    log(
-                        "Обнаружена legacy normal-геометрия (размер почти как fullscreen); используем размер по умолчанию",
-                        "WARNING",
-                    )
-                    width, height = WIDTH, HEIGHT
-
-                if width >= min_width and height >= min_height:
-                    self.resize(width, height)
-                    log(f"Восстановлен размер окна: {width}x{height}", "DEBUG")
-                else:
-                    log(f"Сохраненный размер слишком мал ({width}x{height}), используем по умолчанию", "DEBUG")
-                    self.resize(WIDTH, HEIGHT)
-            else:
-                self.resize(WIDTH, HEIGHT)
-
-            # Позиция
-            saved_pos = get_window_position()
-
-            if saved_pos:
-                x, y = saved_pos
-
-                is_visible = False
-                for screen in screens:
-                    screen_rect = screen.availableGeometry()
-                    # Окно считается видимым если хотя бы 100x100 пикселей на экране
-                    if (x + 100 > screen_rect.left() and
-                        x < screen_rect.right() and
-                        y + 100 > screen_rect.top() and
-                        y < screen_rect.bottom()):
-                        is_visible = True
-                        break
-
-                if is_visible:
-                    self.move(x, y)
-                    log(f"Восстановлена позиция окна: ({x}, {y})", "DEBUG")
-                else:
-                    self.move(
-                        screen_geometry.center().x() - self.width() // 2,
-                        screen_geometry.center().y() - self.height() // 2
-                    )
-                    log("Сохраненная позиция за пределами экранов, окно отцентрировано", "WARNING")
-            else:
-                self.move(
-                    screen_geometry.center().x() - self.width() // 2,
-                    screen_geometry.center().y() - self.height() // 2
-                )
-                log("Позиция не сохранена, окно отцентрировано", "DEBUG")
-
-            # Сохраняем нормальную геометрию (для корректного закрытия из maximized)
-            self._last_normal_geometry = (int(self.x()), int(self.y()), int(self.width()), int(self.height()))
-            self._last_non_minimized_zoomed = saved_maximized
-
-            # Maximized будем применять при первом showEvent (особенно важно для start_in_tray/splash)
-            self._pending_restore_maximized = saved_maximized
-
-        except Exception as e:
-            log(f"Ошибка восстановления геометрии окна: {e}", "❌ ERROR")
-            from config import WIDTH, HEIGHT
-            self.resize(WIDTH, HEIGHT)
-        finally:
-            self._geometry_restore_in_progress = False
-
     def set_status(self, text: str) -> None:
         """Sets the status text."""
         status_type = "neutral"
@@ -679,257 +598,6 @@ class LupiDPIApp(ZapretFluentWindow, MainWindowUI, ThemeSubscriptionManager):
         if store is not None:
             store.set_status_message(text, status_type)
 
-    def _register_global_error_notifier(self) -> None:
-        """Подключает глобальные ERROR/CRITICAL логи к верхнему InfoBar."""
-        try:
-            if hasattr(global_logger, "set_ui_error_notifier"):
-                global_logger.set_ui_error_notifier(self._enqueue_global_error_infobar)
-        except Exception as e:
-            log(f"Ошибка подключения глобального error-notifier: {e}", "DEBUG")
-
-    def _enqueue_global_error_infobar(self, message: str) -> None:
-        """Thread-safe показ ошибки в верхнем InfoBar."""
-        text = str(message or "").strip()
-        if not text:
-            return
-
-        try:
-            QMetaObject.invokeMethod(
-                self,
-                "show_dpi_launch_error",
-                Qt.ConnectionType.QueuedConnection,
-                Q_ARG(str, text),
-            )
-        except Exception:
-            try:
-                self.show_dpi_launch_error(text)
-            except Exception:
-                pass
-
-    @pyqtSlot(str)
-    def show_dpi_launch_error(self, message: str) -> None:
-        """Показывает ошибку сверху окна через InfoBar.
-
-        If the message starts with ``[AUTOFIX:<action>]``, a "Fix" button is
-        added and the InfoBar stays visible until manually closed.
-        """
-        import re as _re
-
-        text = str(message or "").strip()
-        if not text:
-            text = "Не удалось запустить DPI"
-
-        # Extract optional auto-fix action from prefix
-        auto_fix_action: str | None = None
-        m = _re.match(r"^\[AUTOFIX:(\w+)]", text)
-        if m:
-            auto_fix_action = m.group(1)
-            text = text[m.end():]
-
-        # Дедупликация одинаковых ошибок, прилетевших подряд.
-        try:
-            now = time.time()
-            last_msg = str(getattr(self, "_last_dpi_launch_error_message", "") or "")
-            last_ts = float(getattr(self, "_last_dpi_launch_error_ts", 0.0) or 0.0)
-            if text == last_msg and (now - last_ts) < 1.5:
-                return
-            self._last_dpi_launch_error_message = text
-            self._last_dpi_launch_error_ts = now
-        except Exception:
-            pass
-
-        try:
-            from qfluentwidgets import InfoBar as _InfoBar, InfoBarPosition as _IBPos
-
-            # Critical/auto-fixable errors stay until manually closed
-            duration = -1 if auto_fix_action else 10000
-
-            bar = _InfoBar.error(
-                title="Ошибка",
-                content=text,
-                orient=Qt.Orientation.Vertical if len(text) > 90 else Qt.Orientation.Horizontal,
-                isClosable=True,
-                position=_IBPos.TOP,
-                duration=duration,
-                parent=self,
-            )
-
-            if auto_fix_action and bar is not None:
-                self._add_autofix_button(bar, auto_fix_action)
-        except Exception as e:
-            log(f"Ошибка показа InfoBar запуска DPI: {e}", "DEBUG")
-
-    @pyqtSlot(str)
-    def show_dpi_launch_warning(self, message: str) -> None:
-        text = str(message or "").strip()
-        if not text:
-            return
-
-        try:
-            now = time.time()
-            last_msg = str(getattr(self, "_last_dpi_launch_warning_message", "") or "")
-            last_ts = float(getattr(self, "_last_dpi_launch_warning_ts", 0.0) or 0.0)
-            if text == last_msg and (now - last_ts) < 1.5:
-                return
-            self._last_dpi_launch_warning_message = text
-            self._last_dpi_launch_warning_ts = now
-        except Exception:
-            pass
-
-        try:
-            from qfluentwidgets import InfoBar as _InfoBar, InfoBarPosition as _IBPos
-
-            _InfoBar.warning(
-                title="Предупреждение",
-                content=text,
-                orient=Qt.Orientation.Vertical if len(text) > 90 else Qt.Orientation.Horizontal,
-                isClosable=True,
-                position=_IBPos.TOP,
-                duration=9000,
-                parent=self,
-            )
-        except Exception as e:
-            log(f"Ошибка показа warning InfoBar запуска DPI: {e}", "DEBUG")
-
-    def _copy_to_clipboard_with_feedback(self, text: str, *, label: str = "Текст") -> None:
-        try:
-            clipboard = QApplication.clipboard()
-            if clipboard is None:
-                raise RuntimeError("Буфер обмена недоступен")
-            clipboard.setText(str(text or ""))
-            self.show_dpi_launch_warning(f"{label} скопирован в буфер обмена")
-        except Exception as e:
-            log(f"Не удалось скопировать в буфер обмена: {e}", "DEBUG")
-            self.show_dpi_launch_warning(f"Не удалось скопировать {label.lower()}")
-
-    def _enqueue_startup_notification(self, payload: dict | None) -> None:
-        if not payload:
-            return
-        queue = getattr(self, "_startup_notification_queue", None)
-        if queue is None:
-            return
-        queue.append(dict(payload))
-        self._schedule_startup_notification_queue()
-
-    def _schedule_startup_notification_queue(self, delay_ms: int = 0) -> None:
-        timer = getattr(self, "_startup_notification_timer", None)
-        if timer is None:
-            return
-        if timer.isActive():
-            return
-        timer.start(max(0, int(delay_ms)))
-
-    def _show_startup_notification(self, payload: dict) -> None:
-        try:
-            from qfluentwidgets import InfoBar as _InfoBar, InfoBarPosition as _IBPos, PushButton
-
-            level = str(payload.get("level") or "warning").strip().lower()
-            title = str(payload.get("title") or "Предупреждение").strip()
-            content = str(payload.get("content") or "").strip()
-            duration = int(payload.get("duration", 12000) or 12000)
-            orient = Qt.Orientation.Vertical if len(content) > 120 or "\n" in content else Qt.Orientation.Horizontal
-
-            factory = {
-                "success": _InfoBar.success,
-                "info": _InfoBar.info,
-                "error": _InfoBar.error,
-                "warning": _InfoBar.warning,
-            }.get(level, _InfoBar.warning)
-
-            bar = factory(
-                title=title,
-                content=content,
-                orient=orient,
-                isClosable=True,
-                position=_IBPos.TOP_RIGHT,
-                duration=duration,
-                parent=self,
-            )
-
-            for button_info in payload.get("buttons") or []:
-                button_text = str(button_info.get("text") or "").strip()
-                callback = button_info.get("callback")
-                if not button_text or not callable(callback) or bar is None:
-                    continue
-
-                btn = PushButton(button_text)
-                btn.setAutoDefault(False)
-                btn.setDefault(False)
-
-                def _wrap(_checked=False, _btn=btn, _callback=callback):
-                    try:
-                        _btn.setEnabled(False)
-                        _callback()
-                    finally:
-                        _btn.setEnabled(True)
-
-                btn.clicked.connect(_wrap)
-                bar.addWidget(btn)
-        except Exception as e:
-            log(f"Не удалось показать startup InfoBar: {e}", "DEBUG")
-
-    def _flush_startup_notification_queue(self) -> None:
-        if not bool(getattr(self, "_startup_post_init_ready", False)):
-            self._schedule_startup_notification_queue(300)
-            return
-        if not bool(getattr(self, "_startup_background_init_started", False)):
-            self._schedule_startup_notification_queue(300)
-            return
-        if not self.isVisible():
-            return
-
-        queue = getattr(self, "_startup_notification_queue", None)
-        if not queue:
-            return
-
-        payload = queue.popleft()
-        self._show_startup_notification(payload)
-
-        if queue:
-            self._schedule_startup_notification_queue(900)
-
-    def _add_autofix_button(self, bar, action: str) -> None:
-        """Add a 'Fix' button to an InfoBar that runs the auto-fix action."""
-        try:
-            from qfluentwidgets import PushButton, InfoBar as _InfoBar, InfoBarPosition as _IBPos
-
-            btn = PushButton("Исправить")
-            btn.setFixedWidth(100)
-
-            def on_fix():
-                btn.setEnabled(False)
-                btn.setText("...")
-                try:
-                    from dpi.process_health_check import execute_windivert_auto_fix
-                    ok, msg = execute_windivert_auto_fix(action)
-                    bar.close()
-                    if ok:
-                        _InfoBar.success(
-                            title="Готово",
-                            content=msg,
-                            isClosable=True,
-                            position=_IBPos.TOP,
-                            duration=5000,
-                            parent=self,
-                        )
-                    else:
-                        _InfoBar.warning(
-                            title="Не удалось",
-                            content=msg,
-                            isClosable=True,
-                            position=_IBPos.TOP,
-                            duration=8000,
-                            parent=self,
-                        )
-                except Exception as e:
-                    log(f"Auto-fix error: {e}", "ERROR")
-                    btn.setEnabled(True)
-                    btn.setText("Исправить")
-
-            btn.clicked.connect(on_fix)
-            bar.addWidget(btn)
-        except Exception as e:
-            log(f"Error adding auto-fix button: {e}", "DEBUG")
 
     def update_ui(self, running: bool) -> None:
         """Обновляет состояние кнопок в зависимости от статуса запуска"""
@@ -1112,7 +780,6 @@ class LupiDPIApp(ZapretFluentWindow, MainWindowUI, ThemeSubscriptionManager):
         log(f"Метод запуска стратегий: {current_method}", "INFO")
 
         self.start_in_tray = start_in_tray
-        self._register_global_error_notifier()
 
         # Flags
         self._dpi_autostart_initiated = False
@@ -1120,57 +787,25 @@ class LupiDPIApp(ZapretFluentWindow, MainWindowUI, ThemeSubscriptionManager):
         self._stop_dpi_on_exit = False
         self._closing_completely = False
         self._deferred_init_started = False
-        self._startup_splash = None
-        self._startup_splash_show_timer = None
-        self._startup_splash_shown_at = None
-        self._startup_splash_finish_pending = False
-        # Show splash only if startup is still not ready after a short grace period.
-        self._startup_splash_show_delay_ms = 250
-        self._startup_splash_min_visible_ms = 500
         self._startup_post_init_ready = False
         self._startup_subscription_ready = False
         self._startup_background_init_started = False
-        self._startup_notification_queue = deque()
-        self._startup_notification_timer = QTimer(self)
-        self._startup_notification_timer.setSingleShot(True)
-        self._startup_notification_timer.timeout.connect(self._flush_startup_notification_queue)
-
-        # Window geometry persistence (debounce)
-        self._geometry_restore_in_progress = False
-        self._geometry_persistence_enabled = False
-        self._pending_restore_maximized = False
-        self._applied_saved_maximize_state = False
-        self._last_normal_geometry = None
-        self._last_persisted_geometry = None
-        self._last_persisted_maximized = None
-        self._pending_window_maximized_state = None
-
-        self._window_fsm_active = False
-        self._window_fsm_target_mode = None
-        self._window_fsm_retry_count = 0
-        self._last_non_minimized_zoomed = False
-        self._window_zoom_visual_state = None
-
-        self._geometry_save_timer = QTimer(self)
-        self._geometry_save_timer.setSingleShot(True)
-        self._geometry_save_timer.setInterval(450)
-        self._geometry_save_timer.timeout.connect(self._persist_window_geometry_now)
-
-        self._window_state_settle_timer = QTimer(self)
-        self._window_state_settle_timer.setSingleShot(True)
-        self._window_state_settle_timer.setInterval(180)
-        self._window_state_settle_timer.timeout.connect(self._on_window_state_settle_timeout)
-
-        self._window_maximized_persist_timer = QTimer(self)
-        self._window_maximized_persist_timer.setSingleShot(True)
-        self._window_maximized_persist_timer.setInterval(140)
-        self._window_maximized_persist_timer.timeout.connect(self._persist_window_maximized_state_now)
 
         # FluentWindow handles: frameless, titlebar, acrylic, resize, drag
         # We only need to set title and restore geometry
         self.setWindowTitle(f"Zapret2 v{APP_VERSION}")
         self.setMinimumSize(MIN_WIDTH, 400)
-        self.restore_window_geometry()
+        self.window_close_controller = WindowCloseController(self)
+        self.window_geometry_controller = WindowGeometryController(
+            self,
+            min_width=MIN_WIDTH,
+            min_height=400,
+            default_width=WIDTH,
+            default_height=HEIGHT,
+        )
+        self.window_notification_controller = WindowNotificationController(self)
+        self.window_notification_controller.register_global_error_notifier()
+        self.window_geometry_controller.restore_geometry()
 
         self._holiday_effects = HolidayEffectsManager(self)
         self._startup_ttff_logged = False
@@ -1184,199 +819,16 @@ class LupiDPIApp(ZapretFluentWindow, MainWindowUI, ThemeSubscriptionManager):
 
         # Show window right away (FluentWindow handles rendering)
         if not self.start_in_tray and not self.isVisible():
-            self._schedule_startup_splash()
             self.show()
             log("Основное окно показано (FluentWindow, init в фоне)", "DEBUG")
 
         deferred_init_delay_ms = 0 if self.start_in_tray else 60
         QTimer.singleShot(deferred_init_delay_ms, self._deferred_init)
 
-    def _schedule_startup_splash(self) -> None:
-        if self.start_in_tray:
-            return
-        if getattr(self, "_startup_splash", None) is not None:
-            return
-        if bool(getattr(self, "_startup_post_init_ready", False)):
-            return
-        timer = getattr(self, "_startup_splash_show_timer", None)
-        if timer is None:
-            timer = QTimer(self)
-            timer.setSingleShot(True)
-            timer.timeout.connect(self._show_startup_splash)
-            self._startup_splash_show_timer = timer
-        if timer.isActive():
-            return
-        timer.start(int(self._startup_splash_show_delay_ms))
-
-    def _show_startup_splash(self) -> None:
-        if self.start_in_tray or getattr(self, "_startup_splash", None) is not None:
-            return
-        if bool(getattr(self, "_startup_post_init_ready", False)):
-            return
-        timer = getattr(self, "_startup_splash_show_timer", None)
-        if timer is not None and timer.isActive():
-            timer.stop()
-        try:
-            from PyQt6.QtCore import QSize
-            from qfluentwidgets import SplashScreen
-
-            try:
-                from qframelesswindow import StandardTitleBar
-            except Exception:
-                StandardTitleBar = None
-
-            class _StartupSplashScreen(SplashScreen):
-                def __init__(self, icon, parent=None):
-                    super().__init__(icon, parent)
-                    self._pulse_timer = QTimer(self)
-                    self._pulse_timer.setInterval(40)  # ~25 FPS
-                    self._pulse_timer.timeout.connect(self._pulse_tick)
-                    self._pulse_phase = 0.0
-                    self._base_icon_size = QSize(self.iconSize())
-
-                def start_pulse(self) -> None:
-                    self._base_icon_size = QSize(self.iconSize())
-                    self._pulse_phase = 0.0
-                    self._pulse_timer.start()
-
-                def stop_pulse(self) -> None:
-                    try:
-                        self._pulse_timer.stop()
-                    except Exception:
-                        pass
-                    try:
-                        self.setIconSize(self._base_icon_size)
-                        self._center_icon_widget()
-                    except Exception:
-                        pass
-
-                def _center_icon_widget(self) -> None:
-                    try:
-                        iw = int(self.iconSize().width())
-                        ih = int(self.iconSize().height())
-                        self.iconWidget.move(self.width() // 2 - iw // 2, self.height() // 2 - ih // 2)
-                    except Exception:
-                        pass
-
-                def _pulse_tick(self) -> None:
-                    try:
-                        import math
-
-                        self._pulse_phase += 0.22
-                        if self._pulse_phase >= 6.283185307179586:
-                            self._pulse_phase -= 6.283185307179586
-
-                        t = (math.sin(self._pulse_phase) + 1.0) * 0.5
-                        scale = 0.94 + (0.12 * t)  # 0.94..1.06
-                        w = max(64, int(self._base_icon_size.width() * scale))
-                        h = max(64, int(self._base_icon_size.height() * scale))
-
-                        cur = self.iconSize()
-                        if int(cur.width()) == w and int(cur.height()) == h:
-                            return
-
-                        self.setIconSize(QSize(w, h))
-                        self._center_icon_widget()
-                    except Exception:
-                        pass
-
-                def resizeEvent(self, e):
-                    super().resizeEvent(e)
-                    self._center_icon_widget()
-
-            splash = _StartupSplashScreen(self.windowIcon(), self)
-            splash.setGeometry(self.rect())
-
-            splash.setIconSize(QSize(104, 104))
-            splash.start_pulse()
-
-            # Stock title bar from qframelesswindow (as in qfluent docs).
-            if StandardTitleBar is not None:
-                title_bar = StandardTitleBar(splash)
-                title_bar.setIcon(self.windowIcon())
-                title_bar.setTitle(self.windowTitle())
-                splash.setTitleBar(title_bar)
-
-            splash.raise_()
-            splash.show()
-            self._startup_splash = splash
-            self._startup_splash_shown_at = _startup_clock.perf_counter()
-            self._startup_splash_finish_pending = False
-
-            # Safety: never keep splash forever if post-init callback is skipped.
-            QTimer.singleShot(20000, self._finish_startup_splash)
-        except Exception as e:
-            log(f"Startup splash create failed: {e}", "DEBUG")
-
-    def _request_finish_startup_splash(self, *, force: bool = False, reason: str = "") -> None:
-        if getattr(self, "_startup_splash", None) is None:
-            return
-
-        if force:
-            self._finish_startup_splash()
-            return
-
-        shown_at = getattr(self, "_startup_splash_shown_at", None)
-        if shown_at is None:
-            self._finish_startup_splash()
-            return
-
-        elapsed_ms = int((_startup_clock.perf_counter() - shown_at) * 1000)
-        delay_ms = max(0, int(self._startup_splash_min_visible_ms) - elapsed_ms)
-        if delay_ms <= 0:
-            self._finish_startup_splash()
-            return
-
-        if self._startup_splash_finish_pending:
-            return
-
-        self._startup_splash_finish_pending = True
-        log(f"Startup splash finish scheduled in {delay_ms}ms ({reason or 'no-reason'})", "DEBUG")
-        QTimer.singleShot(delay_ms, self._finish_startup_splash)
-
-    def _try_finish_startup_splash(self, reason: str = "") -> None:
-        if not self._startup_post_init_ready:
-            return
-
-        if getattr(self, "_startup_splash", None) is None:
-            timer = getattr(self, "_startup_splash_show_timer", None)
-            if timer is not None and timer.isActive():
-                timer.stop()
-            self._start_background_init_after_splash()
-            return
-
-        self._request_finish_startup_splash(reason=reason or "post-init-ready")
-
     def _mark_startup_subscription_ready(self, source: str = "subscription_ready") -> None:
         self._startup_subscription_ready = True
-        self._try_finish_startup_splash(source)
 
-    def _finish_startup_splash(self) -> None:
-        self._startup_splash_finish_pending = False
-        splash = getattr(self, "_startup_splash", None)
-        if splash is None:
-            return
-        self._startup_splash = None
-        self._startup_splash_shown_at = None
-
-        try:
-            stop_pulse = getattr(splash, "stop_pulse", None)
-            if callable(stop_pulse):
-                stop_pulse()
-        except Exception:
-            pass
-
-        try:
-            splash.finish()
-        except Exception:
-            try:
-                splash.close()
-            except Exception:
-                pass
-
-        self._start_background_init_after_splash()
-
-    def _start_background_init_after_splash(self) -> None:
+    def _start_background_init(self) -> None:
         if self._startup_background_init_started:
             return
         self._startup_background_init_started = True
@@ -1388,7 +840,9 @@ class LupiDPIApp(ZapretFluentWindow, MainWindowUI, ThemeSubscriptionManager):
         except Exception:
             pass
 
-        self._schedule_startup_notification_queue(0)
+        notification_controller = getattr(self, "window_notification_controller", None)
+        if notification_controller is not None:
+            notification_controller.schedule_startup_notification_queue(0)
 
     def _deferred_init(self) -> None:
         """Heavy initialization — runs after first frame is shown."""
@@ -1417,7 +871,6 @@ class LupiDPIApp(ZapretFluentWindow, MainWindowUI, ThemeSubscriptionManager):
                 log(traceback.format_exc(), "DEBUG")
             except Exception:
                 pass
-            self._request_finish_startup_splash(force=True, reason="build_ui_failed")
             return
         log(f"⏱ Startup: build_ui {(_time.perf_counter() - _t_build) * 1000:.0f}ms", "DEBUG")
 
@@ -1496,401 +949,14 @@ class LupiDPIApp(ZapretFluentWindow, MainWindowUI, ThemeSubscriptionManager):
 
         _log_startup_metric("PostInitDone", details)
         self._startup_post_init_ready = True
-        self._try_finish_startup_splash("post_init_done")
-        self._schedule_startup_notification_queue(0)
+        self._start_background_init()
+        notification_controller = getattr(self, "window_notification_controller", None)
+        if notification_controller is not None:
+            notification_controller.schedule_startup_notification_queue(0)
 
     def setWindowTitle(self, title: str):
         """Override to update FluentWindow's built-in titlebar."""
         super().setWindowTitle(title)
-
-    def _enable_geometry_persistence(self) -> None:
-        if getattr(self, "_geometry_persistence_enabled", False):
-            return
-        self._geometry_persistence_enabled = True
-
-    def _is_window_zoomed(self) -> bool:
-        """Возвращает True, если окно в maximized/fullscreen состоянии."""
-        state = None
-        try:
-            state = self.windowState()
-        except Exception:
-            state = None
-
-        try:
-            if self.isMaximized() or self.isFullScreen():
-                return True
-        except Exception:
-            pass
-
-        if state is not None:
-            try:
-                if state & Qt.WindowState.WindowMaximized:
-                    return True
-                if state & Qt.WindowState.WindowFullScreen:
-                    return True
-            except Exception:
-                pass
-
-        if state is None:
-            return bool(getattr(self, "_was_maximized", False))
-
-        return False
-
-    def _apply_window_zoom_visual_state(self, is_zoomed: bool) -> None:
-        """Применяет визуальное состояние окна для maximized/fullscreen."""
-        zoomed = bool(is_zoomed)
-        if self._window_zoom_visual_state is zoomed:
-            return
-
-        self._window_zoom_visual_state = zoomed
-
-        if hasattr(self, "_was_maximized"):
-            self._was_maximized = zoomed
-
-        if hasattr(self, "_update_border_radius"):
-            self._update_border_radius(not zoomed)
-
-        if hasattr(self, "_set_handles_visible"):
-            self._set_handles_visible(not zoomed)
-
-        # FluentWindow handles maximize button state automatically
-
-    def _schedule_window_maximized_persist(self, is_zoomed: bool) -> None:
-        """Debounce сохранения maximize-флага, чтобы убрать дребезг True/False/True."""
-        self._pending_window_maximized_state = bool(is_zoomed)
-        try:
-            if hasattr(self, "_window_maximized_persist_timer") and self._window_maximized_persist_timer is not None:
-                self._window_maximized_persist_timer.start()
-            else:
-                self._persist_window_maximized_state_now()
-        except Exception:
-            pass
-
-    def _persist_window_maximized_state_now(self) -> None:
-        state = self._pending_window_maximized_state
-        if state is None:
-            return
-
-        self._pending_window_maximized_state = None
-
-        try:
-            from config import set_window_maximized
-            state_bool = bool(state)
-            if self._last_persisted_maximized != state_bool:
-                set_window_maximized(state_bool)
-                self._last_persisted_maximized = state_bool
-        except Exception:
-            pass
-
-    def _detect_window_mode(self) -> str:
-        """Возвращает актуальный режим окна: normal/maximized/minimized."""
-        if self._is_window_minimized_state():
-            return "minimized"
-        if self._is_window_zoomed():
-            return "maximized"
-        return "normal"
-
-    def _apply_window_mode_command(self, mode: str) -> bool:
-        """Низкоуровнево применяет режим окна."""
-        mode_str = str(mode)
-
-        try:
-            if mode_str == "maximized":
-                self.showMaximized()
-            elif mode_str == "normal":
-                self.showNormal()
-            elif mode_str == "minimized":
-                self.showMinimized()
-            else:
-                return False
-            return True
-        except Exception:
-            pass
-
-        try:
-            state = self.windowState()
-        except Exception:
-            state = Qt.WindowState.WindowNoState
-
-        try:
-            if mode_str == "maximized":
-                state = state & ~Qt.WindowState.WindowMinimized
-                state = state & ~Qt.WindowState.WindowFullScreen
-                state = state | Qt.WindowState.WindowMaximized
-            elif mode_str == "normal":
-                state = state & ~Qt.WindowState.WindowMinimized
-                state = state & ~Qt.WindowState.WindowMaximized
-                state = state & ~Qt.WindowState.WindowFullScreen
-            elif mode_str == "minimized":
-                state = state & ~Qt.WindowState.WindowFullScreen
-                state = state | Qt.WindowState.WindowMinimized
-            else:
-                return False
-
-            self.setWindowState(state)
-            return True
-        except Exception:
-            return False
-
-    def _start_window_fsm_transition(self, target_mode: str) -> None:
-        self._window_fsm_active = True
-        self._window_fsm_target_mode = str(target_mode)
-        self._window_fsm_retry_count = 0
-
-        if self._window_fsm_target_mode != "minimized":
-            self._apply_window_zoom_visual_state(self._window_fsm_target_mode == "maximized")
-
-        self._apply_window_mode_command(self._window_fsm_target_mode)
-
-        try:
-            if hasattr(self, "_window_state_settle_timer") and self._window_state_settle_timer is not None:
-                self._window_state_settle_timer.start()
-        except Exception:
-            pass
-
-    def _finish_window_fsm_transition(self, actual_mode=None) -> None:
-        mode = str(actual_mode) if actual_mode is not None else str(self._detect_window_mode())
-
-        self._window_fsm_active = False
-        self._window_fsm_target_mode = None
-        self._window_fsm_retry_count = 0
-
-        try:
-            if hasattr(self, "_window_state_settle_timer") and self._window_state_settle_timer is not None:
-                self._window_state_settle_timer.stop()
-        except Exception:
-            pass
-
-        if mode == "minimized":
-            return
-
-        zoomed = (mode == "maximized")
-        self._last_non_minimized_zoomed = zoomed
-        self._apply_window_zoom_visual_state(zoomed)
-        self._schedule_window_maximized_persist(zoomed)
-
-    def _on_window_state_settle_timeout(self) -> None:
-        """Дожимает целевое состояние, если WM не применил его с первого раза."""
-        if not self._window_fsm_active:
-            return
-
-        target_mode = self._window_fsm_target_mode
-        if target_mode is None:
-            return
-
-        actual_mode = self._detect_window_mode()
-        if actual_mode == target_mode:
-            self._finish_window_fsm_transition(actual_mode)
-            return
-
-        if self._window_fsm_retry_count < 2:
-            self._window_fsm_retry_count += 1
-            self._apply_window_mode_command(target_mode)
-            try:
-                if hasattr(self, "_window_state_settle_timer") and self._window_state_settle_timer is not None:
-                    self._window_state_settle_timer.start()
-            except Exception:
-                pass
-            return
-
-        self._finish_window_fsm_transition(actual_mode)
-
-    def _request_window_mode(self, target_mode: str) -> str:
-        """Единый вход FSM для normal/maximized/minimized."""
-        mode = str(target_mode)
-        if mode not in ("normal", "maximized", "minimized"):
-            return self._detect_window_mode()
-
-        if self._window_fsm_active and self._window_fsm_target_mode == mode:
-            return mode
-
-        current_mode = self._detect_window_mode()
-        if not self._window_fsm_active and current_mode == mode:
-            try:
-                if not self.isVisible():
-                    self._apply_window_mode_command(mode)
-            except Exception:
-                pass
-            self._finish_window_fsm_transition(current_mode)
-            return current_mode
-
-        self._start_window_fsm_transition(mode)
-        return mode
-
-    def _request_window_zoom_state(self, maximize: bool) -> bool:
-        target_mode = "maximized" if bool(maximize) else "normal"
-        resulting_mode = self._request_window_mode(target_mode)
-        if resulting_mode == "minimized":
-            return bool(self._last_non_minimized_zoomed)
-        return bool(resulting_mode == "maximized")
-
-    def request_window_minimize(self) -> bool:
-        """Сворачивает окно через общий FSM."""
-        resulting_mode = self._request_window_mode("minimized")
-        return bool(resulting_mode == "minimized" or self._is_window_minimized_state())
-
-    def restore_window_from_zoom_for_drag(self) -> bool:
-        """Выводит окно из maximized/fullscreen перед drag и возвращает факт изменения."""
-        current_mode = self._detect_window_mode()
-        current_zoomed = (current_mode == "maximized")
-
-        if not current_zoomed:
-            if not (self._window_fsm_active and self._window_fsm_target_mode == "maximized"):
-                return False
-
-        self._request_window_zoom_state(False)
-
-        # Для drag важно сразу выйти в normal; если WM не успел — дожимаем 1 раз.
-        if self._is_window_zoomed():
-            if not self._apply_window_mode_command("normal"):
-                return False
-
-        actual_mode = self._detect_window_mode()
-        if actual_mode != "maximized":
-            self._finish_window_fsm_transition(actual_mode)
-
-        return bool(actual_mode != "maximized")
-
-    def toggle_window_maximize_restore(self) -> bool:
-        """Переключает окно между maximized/fullscreen и normal. Возвращает целевое zoomed-состояние."""
-        if self._window_fsm_active and self._window_fsm_target_mode in ("normal", "maximized"):
-            current_zoomed = bool(self._window_fsm_target_mode == "maximized")
-        else:
-            current_mode = self._detect_window_mode()
-            if current_mode == "minimized":
-                current_zoomed = bool(self._last_non_minimized_zoomed)
-            else:
-                current_zoomed = bool(current_mode == "maximized")
-
-        should_maximize = not current_zoomed
-        return bool(self._request_window_zoom_state(should_maximize))
-
-    def _is_window_minimized_state(self) -> bool:
-        try:
-            if self.isMinimized():
-                return True
-        except Exception:
-            pass
-
-        try:
-            return bool(self.windowState() & Qt.WindowState.WindowMinimized)
-        except Exception:
-            return False
-
-    def _schedule_window_geometry_save(self) -> None:
-        if not getattr(self, "_geometry_persistence_enabled", False):
-            return
-        if getattr(self, "_geometry_restore_in_progress", False):
-            return
-        if getattr(self, "_is_exiting", False):
-            return
-
-        try:
-            if self.isMinimized():
-                return
-        except Exception:
-            return
-
-        try:
-            if hasattr(self, "_geometry_save_timer") and self._geometry_save_timer is not None:
-                self._geometry_save_timer.start()
-        except Exception:
-            pass
-
-    def _on_window_geometry_changed(self) -> None:
-        if getattr(self, "_geometry_restore_in_progress", False):
-            return
-
-        try:
-            if self.isMinimized() or self._is_window_zoomed():
-                return
-        except Exception:
-            return
-
-        self._last_normal_geometry = (int(self.x()), int(self.y()), int(self.width()), int(self.height()))
-        self._schedule_window_geometry_save()
-
-    def _get_normal_geometry_to_save(self, is_maximized: bool):
-        if not is_maximized:
-            return (int(self.x()), int(self.y()), int(self.width()), int(self.height()))
-
-        # Если окно maximized — сохраняем "normal" геометрию, чтобы корректно восстановить при следующем запуске.
-        try:
-            normal_geo = self.normalGeometry()
-            w = int(normal_geo.width())
-            h = int(normal_geo.height())
-            if w > 0 and h > 0:
-                return (int(normal_geo.x()), int(normal_geo.y()), w, h)
-        except Exception:
-            pass
-
-        if self._last_normal_geometry:
-            return self._last_normal_geometry
-
-        return None
-
-    def _persist_window_geometry_now(self, force: bool = False) -> None:
-        if not force:
-            if not getattr(self, "_geometry_persistence_enabled", False):
-                return
-            if getattr(self, "_geometry_restore_in_progress", False):
-                return
-            if getattr(self, "_is_exiting", False):
-                return
-
-        try:
-            if self.isMinimized():
-                return
-        except Exception:
-            pass
-
-        try:
-            from config import set_window_position, set_window_size, set_window_maximized
-
-            is_maximized = bool(self._is_window_zoomed())
-
-            if force or self._last_persisted_maximized != is_maximized:
-                set_window_maximized(is_maximized)
-                self._last_persisted_maximized = is_maximized
-                self._pending_window_maximized_state = is_maximized
-                try:
-                    if hasattr(self, "_window_maximized_persist_timer") and self._window_maximized_persist_timer is not None:
-                        self._window_maximized_persist_timer.stop()
-                except Exception:
-                    pass
-
-            geometry = self._get_normal_geometry_to_save(is_maximized)
-            if geometry is None:
-                return
-
-            x, y, w, h = geometry
-            w = max(int(w), MIN_WIDTH)
-            h = max(int(h), 400)
-            geometry = (int(x), int(y), int(w), int(h))
-
-            if force or self._last_persisted_geometry != geometry:
-                set_window_position(geometry[0], geometry[1])
-                set_window_size(geometry[2], geometry[3])
-                self._last_persisted_geometry = geometry
-
-        except Exception as e:
-            log(f"Ошибка сохранения геометрии окна: {e}", "DEBUG")
-
-    def _apply_saved_maximized_state_if_needed(self) -> None:
-        if getattr(self, "_applied_saved_maximize_state", False):
-            return
-
-        self._applied_saved_maximize_state = True
-
-        if getattr(self, "_pending_restore_maximized", False):
-            try:
-                if not self._is_window_zoomed():
-                    self._geometry_restore_in_progress = True
-                    self._request_window_zoom_state(True)
-            except Exception:
-                pass
-            finally:
-                self._geometry_restore_in_progress = False
 
     def changeEvent(self, event):
         if event.type() == QEvent.Type.ActivationChange:
@@ -1901,20 +967,9 @@ class LupiDPIApp(ZapretFluentWindow, MainWindowUI, ThemeSubscriptionManager):
                 pass
 
         if event.type() == QEvent.Type.WindowStateChange:
-            current_mode = self._detect_window_mode()
-
-            if self._window_fsm_active and self._window_fsm_target_mode is not None:
-                target_mode = str(self._window_fsm_target_mode)
-                if current_mode == target_mode:
-                    self._finish_window_fsm_transition(current_mode)
-                elif target_mode != "minimized":
-                    # Держим визуал в целевом состоянии до завершения transition.
-                    self._apply_window_zoom_visual_state(target_mode == "maximized")
-            elif current_mode != "minimized":
-                zoomed = bool(current_mode == "maximized")
-                self._last_non_minimized_zoomed = zoomed
-                self._apply_window_zoom_visual_state(zoomed)
-                self._schedule_window_maximized_persist(zoomed)
+            geometry_controller = getattr(self, "window_geometry_controller", None)
+            if geometry_controller is not None:
+                geometry_controller.on_window_state_change()
 
             try:
                 effects = getattr(self, "_holiday_effects", None)
@@ -1934,7 +989,9 @@ class LupiDPIApp(ZapretFluentWindow, MainWindowUI, ThemeSubscriptionManager):
 
     def moveEvent(self, event):
         super().moveEvent(event)
-        self._on_window_geometry_changed()
+        geometry_controller = getattr(self, "window_geometry_controller", None)
+        if geometry_controller is not None:
+            geometry_controller.on_geometry_changed()
     
     def _force_style_refresh(self) -> None:
         """Принудительно обновляет стили всех виджетов после показа окна
@@ -2062,7 +1119,9 @@ class LupiDPIApp(ZapretFluentWindow, MainWindowUI, ThemeSubscriptionManager):
             self._update_titlebar_search_width()
         except Exception:
             pass
-        self._on_window_geometry_changed()
+        geometry_controller = getattr(self, "window_geometry_controller", None)
+        if geometry_controller is not None:
+            geometry_controller.on_geometry_changed()
         try:
             effects = getattr(self, "_holiday_effects", None)
             if effects is not None:
@@ -2080,10 +1139,12 @@ class LupiDPIApp(ZapretFluentWindow, MainWindowUI, ThemeSubscriptionManager):
             _log_startup_metric("TTFF", "first showEvent")
 
         # Применяем сохранённое maximized состояние при первом показе
-        self._apply_saved_maximized_state_if_needed()
-
+        geometry_controller = getattr(self, "window_geometry_controller", None)
+        if geometry_controller is not None:
+            geometry_controller.apply_saved_maximized_state_if_needed()
         # Включаем автосохранение геометрии (после первого show + небольшой паузы)
-        QTimer.singleShot(350, self._enable_geometry_persistence)
+        if geometry_controller is not None:
+            QTimer.singleShot(350, geometry_controller.enable_persistence)
 
         try:
             effects = getattr(self, "_holiday_effects", None)
@@ -2093,7 +1154,9 @@ class LupiDPIApp(ZapretFluentWindow, MainWindowUI, ThemeSubscriptionManager):
         except Exception:
             pass
 
-        self._schedule_startup_notification_queue(0)
+        notification_controller = getattr(self, "window_notification_controller", None)
+        if notification_controller is not None:
+            notification_controller.schedule_startup_notification_queue(0)
 
     def _init_garland_from_registry(self) -> None:
         """Загружает состояние гирлянды и снежинок из реестра при старте"""
@@ -2363,7 +1426,7 @@ def main():
 
             if warnings:
                 for warning_text in [str(w).strip() for w in warnings if str(w).strip()]:
-                    window._enqueue_startup_notification(
+                    window.window_notification_controller.enqueue_startup_notification(
                         {
                             "level": "warning",
                             "title": "Проверка при запуске",
@@ -2382,7 +1445,7 @@ def main():
 
                     kaspersky_details = get_kaspersky_warning_details()
                     if kaspersky_details:
-                        window._enqueue_startup_notification(
+                        window.window_notification_controller.enqueue_startup_notification(
                             {
                                 "level": "warning",
                                 "title": str(kaspersky_details.get("title") or "Обнаружен Kaspersky"),
@@ -2391,14 +1454,14 @@ def main():
                                 "buttons": [
                                     {
                                         "text": "Копировать папку",
-                                        "callback": lambda details=kaspersky_details: window._copy_to_clipboard_with_feedback(
+                                        "callback": lambda details=kaspersky_details: window.window_notification_controller.copy_to_clipboard_with_feedback(
                                             str(details.get("base_dir") or ""),
                                             label="Путь к папке",
                                         ),
                                     },
                                     {
                                         "text": "Копировать exe",
-                                        "callback": lambda details=kaspersky_details: window._copy_to_clipboard_with_feedback(
+                                        "callback": lambda details=kaspersky_details: window.window_notification_controller.copy_to_clipboard_with_feedback(
                                             str(details.get("exe_path") or ""),
                                             label="Путь к exe",
                                         ),
@@ -2419,7 +1482,7 @@ def main():
 
                     title = str(proxy_prompt.get("title") or "Включен системный прокси").strip()
                     message = str(proxy_prompt.get("message") or "").strip()
-                    window._enqueue_startup_notification(
+                    window.window_notification_controller.enqueue_startup_notification(
                         {
                             "level": "warning",
                             "title": title,
@@ -2430,7 +1493,7 @@ def main():
                                     "text": "Отключить прокси",
                                     "callback": lambda: (
                                         (lambda success, disable_error: (
-                                            window._enqueue_startup_notification(
+                                            window.window_notification_controller.enqueue_startup_notification(
                                                 {
                                                     "level": "success" if success else "warning",
                                                     "title": "Прокси отключен" if success else "Не удалось отключить прокси",
@@ -2476,7 +1539,7 @@ def main():
 
                     telega_details = get_telega_warning_details(found_path=str(telega_found_path))
                     if telega_details:
-                        window._enqueue_startup_notification(
+                        window.window_notification_controller.enqueue_startup_notification(
                             {
                                 "level": "error",
                                 "title": str(telega_details.get("title") or "Обнаружена Telega Desktop"),
@@ -2617,27 +1680,28 @@ def main():
 
     def _deferred_maintenance_worker():
         started_at = time.perf_counter()
+        telega_found_path = None
+        association_ok = False
         try:
-            telega_found_path = None
             try:
                 from startup.telega_check import _check_telega_installed
                 telega_found_path = _check_telega_installed()
             except Exception:
                 telega_found_path = None
 
-            association_ok = bool(set_batfile_association())
-
+            try:
+                association_ok = bool(set_batfile_association())
+            except Exception as association_error:
+                log(f"Ошибка установки ассоциации batfile: {association_error}", "DEBUG")
+        except Exception as e:
+            log(f"Ошибка поздних служебных проверок: {e}", "❌ ERROR")
+        finally:
             _deferred_maintenance_bridge.finished.emit(
                 {
                     "association_ok": association_ok,
                     "telega_found_path": telega_found_path,
                     "duration_ms": int((time.perf_counter() - started_at) * 1000),
                 }
-            )
-        except Exception as e:
-            log(f"Ошибка поздних служебных проверок: {e}", "❌ ERROR")
-            _deferred_maintenance_bridge.finished.emit(
-                {"duration_ms": int((time.perf_counter() - started_at) * 1000)}
             )
 
     def _start_deferred_maintenance():

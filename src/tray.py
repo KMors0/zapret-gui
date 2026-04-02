@@ -5,7 +5,7 @@ import sys
 
 from PyQt6.QtWidgets import QMenu, QApplication, QStyle, QSystemTrayIcon
 from PyQt6.QtGui     import QAction, QIcon
-from PyQt6.QtCore    import Qt, QTimer
+from PyQt6.QtCore    import Qt, QTimer, QObject, QEvent
 
 try:
     import qtawesome as qta
@@ -13,13 +13,66 @@ try:
 except ImportError:
     HAS_QTAWESOME = False
 
-try:
-    from qfluentwidgets import SystemTrayMenu, RoundMenu
-    HAS_FLUENT_TRAY_MENU = True
-except ImportError:
-    SystemTrayMenu = None
-    RoundMenu = None
-    HAS_FLUENT_TRAY_MENU = False
+# ----------------------------------------------------------------------
+#   ВСПОМОГАТЕЛЬНЫЙ ФИЛЬТР ЖИЗНЕННОГО ЦИКЛА МЕНЮ ТРЕЯ
+# ----------------------------------------------------------------------
+class _TrayMenuLifecycleFilter(QObject):
+    """Явно закрывает меню трея, если Windows/Qt не закрыли его сами."""
+
+    def __init__(self, menu: QMenu):
+        super().__init__(menu)
+        self._menu = menu
+        self._owner_window = menu.parentWidget()
+        self._app = QApplication.instance()
+
+        menu.installEventFilter(self)
+
+        if self._owner_window is not None and self._owner_window is not menu:
+            self._owner_window.installEventFilter(self)
+
+        if self._app is not None:
+            self._app.installEventFilter(self)
+
+    def _close_menu_later(self) -> None:
+        if not self._menu.isVisible():
+            return
+        QTimer.singleShot(0, self._hide_menu)
+
+    def _hide_menu(self) -> None:
+        if not self._menu.isVisible():
+            return
+        try:
+            self._menu.hide()
+        except Exception:
+            pass
+
+    def eventFilter(self, obj, event):  # noqa: N802 (Qt override)
+        if event is None:
+            return False
+
+        event_type = event.type()
+
+        if obj is self._menu and event_type in (
+            QEvent.Type.WindowDeactivate,
+            QEvent.Type.FocusOut,
+        ):
+            self._close_menu_later()
+            return False
+
+        if obj is self._owner_window and event_type in (
+            QEvent.Type.Hide,
+            QEvent.Type.Close,
+            QEvent.Type.WindowDeactivate,
+        ):
+            self._close_menu_later()
+            return False
+
+        if obj is self._app and event_type == QEvent.Type.ApplicationDeactivate:
+            self._close_menu_later()
+            return False
+
+        return False
+
 
 # ----------------------------------------------------------------------
 #   SystemTrayManager
@@ -43,9 +96,6 @@ class SystemTrayManager:
         self.setup_menu()                     # ← создаём меню
         self.tray_icon.activated.connect(self.on_tray_icon_activated)
         self.tray_icon.show()
-
-        # перехватываем события окна
-        self.install_event_handlers()
 
     # ------------------------------------------------------------------
     #  ВСПЛЫВАЮЩИЕ СООБЩЕНИЯ
@@ -75,9 +125,12 @@ class SystemTrayManager:
     #  КОНТЕКСТНОЕ МЕНЮ
     # ------------------------------------------------------------------
     def setup_menu(self):
-        using_fluent_menu = HAS_FLUENT_TRAY_MENU and SystemTrayMenu is not None
-        menu = SystemTrayMenu(parent=self.parent) if using_fluent_menu else QMenu()
+        # Для системного трея используем обычное нативное QMenu.
+        # Кастомное fluent-меню визуально красивее, но в некоторых Windows-сценариях
+        # может "зависать" поверх экрана и не закрываться корректно.
+        menu = QMenu(self.parent)
         self.menu = menu
+        self._menu_lifecycle_filter = _TrayMenuLifecycleFilter(menu)
 
         # Диагностика: помогает понять, "появляется ли" меню и не закрывается ли сразу.
         try:
@@ -89,9 +142,7 @@ class SystemTrayManager:
         except Exception:
             pass
 
-        # Применяем стиль только для обычного QMenu.
-        if not using_fluent_menu:
-            self._apply_menu_style(menu)
+        self._apply_menu_style(menu)
 
         # показать окно
         show_act = QAction("Показать", self.parent)
@@ -103,15 +154,9 @@ class SystemTrayManager:
         # Прозрачность/акрил окна (быстрые пресеты + способ восстановить видимость)
         is_win11_plus = sys.platform == "win32" and sys.getwindowsversion().build >= 22000
         opacity_menu_title = "Эффект акрилика окна" if is_win11_plus else "Прозрачность окна"
-        if using_fluent_menu and RoundMenu is not None:
-            opacity_menu = RoundMenu(opacity_menu_title, menu)
-            if HAS_QTAWESOME:
-                opacity_menu.setIcon(qta.icon('fa5s.adjust', color='#60cdff'))
-            menu.addMenu(opacity_menu)
-        else:
-            opacity_menu = menu.addMenu(opacity_menu_title)
-            if HAS_QTAWESOME:
-                opacity_menu.setIcon(qta.icon('fa5s.adjust', color='#60cdff'))
+        opacity_menu = menu.addMenu(opacity_menu_title)
+        if HAS_QTAWESOME:
+            opacity_menu.setIcon(qta.icon('fa5s.adjust', color='#60cdff'))
 
         def set_opacity(value: int):
             try:
@@ -382,42 +427,10 @@ class SystemTrayManager:
     def _save_window_geometry(self):
         """Сохраняет текущую позицию и размер окна"""
         try:
-            # Предпочтительно: единый persistence-слой главного окна.
-            if hasattr(self.parent, "_persist_window_geometry_now"):
-                self.parent._persist_window_geometry_now(force=True)
+            controller = getattr(self.parent, "window_geometry_controller", None)
+            if controller is None:
                 return
-
-            # Fallback для окон без современного persistence.
-            from config import set_window_position, set_window_size, set_window_maximized
-            from log import log
-
-            if not self.parent.isVisible():
-                return
-
-            try:
-                state = self.parent.windowState()
-                is_zoomed = bool(
-                    self.parent.isMaximized()
-                    or self.parent.isFullScreen()
-                    or (state & Qt.WindowState.WindowMaximized)
-                    or (state & Qt.WindowState.WindowFullScreen)
-                )
-            except Exception:
-                is_zoomed = bool(self.parent.isMaximized())
-
-            if is_zoomed:
-                geo = self.parent.normalGeometry()
-            else:
-                geo = self.parent.geometry()
-
-            set_window_position(geo.x(), geo.y())
-            set_window_size(geo.width(), geo.height())
-            set_window_maximized(bool(is_zoomed))
-
-            log(
-                f"Геометрия окна сохранена: ({geo.x()}, {geo.y()}), {geo.width()}x{geo.height()}, maximized={bool(is_zoomed)}",
-                "DEBUG",
-            )
+            controller.persist_now(force=True)
         except Exception as e:
             from log import log
             log(f"Ошибка сохранения геометрии окна: {e}", "❌ ERROR")
@@ -582,44 +595,12 @@ class SystemTrayManager:
         except Exception:
             pass
 
-        was_maximized = False
-        runtime_state_detected = False
-        try:
-            if hasattr(self.parent, "_is_window_zoomed"):
-                was_maximized = bool(self.parent._is_window_zoomed())
-            else:
-                state = self.parent.windowState()
-                was_maximized = bool(
-                    self.parent.isMaximized()
-                    or self.parent.isFullScreen()
-                    or (state & Qt.WindowState.WindowMaximized)
-                    or (state & Qt.WindowState.WindowFullScreen)
-                    or getattr(self.parent, "_was_maximized", False)
-                )
-            runtime_state_detected = True
-        except Exception:
-            pass
-
-        if not runtime_state_detected:
+        controller = getattr(self.parent, "window_geometry_controller", None)
+        if controller is not None:
             try:
-                from config import get_window_maximized
-                was_maximized = bool(get_window_maximized())
+                controller.request_zoom_state(controller.remembered_zoom_state())
             except Exception:
                 pass
-
-        if hasattr(self.parent, "_request_window_zoom_state"):
-            try:
-                self.parent._request_window_zoom_state(bool(was_maximized))
-            except Exception:
-                if was_maximized:
-                    self.parent.showMaximized()
-                else:
-                    self.parent.showNormal()
-        else:
-            if was_maximized:
-                self.parent.showMaximized()
-            else:
-                self.parent.showNormal()
 
         self.parent.activateWindow()
         self.parent.raise_()
@@ -627,40 +608,3 @@ class SystemTrayManager:
     # ------------------------------------------------------------------
     #  ВСПОМОГАТЕЛЬНЫЕ
     # ------------------------------------------------------------------
-    def install_event_handlers(self):
-        self._orig_close  = self.parent.closeEvent
-        self._orig_change = self.parent.changeEvent
-        self.parent.closeEvent  = self._close_event
-        self.parent.changeEvent = self._change_event
-
-    def _close_event(self, ev):
-        # ✅ ПРОВЕРЯЕМ флаг полного закрытия программы
-        if hasattr(self.parent, '_closing_completely') and self.parent._closing_completely:
-            # Программа полностью закрывается - вызываем оригинальный closeEvent
-            # (который сохранит позицию)
-            self._orig_close(ev)
-            return
-
-        # Обычное закрытие окна (Alt+F4, системное закрытие и т.д.)
-        # Диалог показываем только когда DPI запущен.
-        ev.ignore()
-        try:
-            from ui.close_dialog import ask_close_action
-
-            result = ask_close_action(parent=self.parent)
-            if result is None:
-                # Пользователь отменил
-                return
-
-            if result == "tray":
-                self.hide_to_tray(show_hint=True)
-                return
-
-            # result: False = только GUI, True = GUI + остановить DPI
-            self.parent.request_exit(stop_dpi=result)
-        except Exception:
-            # Fallback: закрыть только GUI
-            self.exit_only()
-
-    def _change_event(self, ev):
-        self._orig_change(ev)

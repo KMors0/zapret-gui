@@ -170,6 +170,7 @@ def prepare_support_request(
     candidate_paths: Iterable[str | os.PathLike[str] | None],
     recent_patterns: Sequence[str] = (),
     extra_note: str = "",
+    discussions_url: str | None = None,
     open_discussions: bool = True,
     open_bundle_folder: bool = True,
 ) -> PreparedSupportRequest:
@@ -187,7 +188,8 @@ def prepare_support_request(
     )
 
     copied = _copy_to_clipboard(template_text)
-    discussions_opened = webbrowser.open(SUPPORT_DISCUSSIONS_URL) if open_discussions else False
+    target_discussions_url = str(discussions_url or SUPPORT_DISCUSSIONS_URL).strip() or SUPPORT_DISCUSSIONS_URL
+    discussions_opened = webbrowser.open(target_discussions_url) if open_discussions else False
     folder_opened = False
     if zip_path and open_bundle_folder:
         folder_opened = _open_path(str(Path(zip_path).parent))

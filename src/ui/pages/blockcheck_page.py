@@ -14,6 +14,7 @@ from PyQt6.QtGui import QFont, QColor
 from PyQt6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QSizePolicy, QFrame
 
 from ui.pages.base_page import BasePage, ScrollBlockingTextEdit
+from ui.support_request_actions import prepare_blockcheck_support_request
 from ui.text_catalog import tr as tr_catalog
 
 try:
@@ -251,6 +252,8 @@ class BlockcheckPage(BasePage):
         self._tcp_section_label: QLabel | None = None
         self._tcp_table = None
         self._runtime_warnings_seen: set[str] = set()
+        self._prepare_support_btn = None
+        self._support_status_label = None
         self._ui_built = False
 
     def _ensure_ui_built(self) -> None:
@@ -577,7 +580,19 @@ class BlockcheckPage(BasePage):
         self._expand_log_btn.setFixedWidth(120)
         self._expand_log_btn.clicked.connect(self._toggle_log_expand)
         log_header = QHBoxLayout()
+        self._support_status_label = CaptionLabel("") if HAS_FLUENT else QLabel("")
+        self._support_status_label.setWordWrap(True)
+        log_header.addWidget(self._support_status_label, 1)
         log_header.addStretch()
+        self._prepare_support_btn = ActionButton(
+            tr_catalog(
+                "page.blockcheck.prepare_support",
+                default="Подготовить обращение",
+            ),
+            icon_name="fa5b.github",
+        )
+        self._prepare_support_btn.clicked.connect(self._prepare_support_from_blockcheck)
+        log_header.addWidget(self._prepare_support_btn)
         log_header.addWidget(self._expand_log_btn)
         self._log_card.add_layout(log_header)
 
@@ -806,6 +821,7 @@ class BlockcheckPage(BasePage):
         self._log_edit.clear()
         self._last_report = None
         self._runtime_warnings_seen.clear()
+        self._set_support_status("")
 
         # UI state
         self._start_btn.setEnabled(False)
@@ -978,12 +994,24 @@ class BlockcheckPage(BasePage):
             self._status_label.setText(
                 tr_catalog("page.blockcheck.error", default="Ошибка выполнения")
             )
+            self._set_support_status(
+                tr_catalog(
+                    "page.blockcheck.support_ready_after_error",
+                    default="Можно подготовить обращение по логам ошибки",
+                )
+            )
             return
 
         elapsed = report.elapsed_seconds
         self._append_run_log(f"\nCompleted in {elapsed:.1f}s")
         self._status_label.setText(
             tr_catalog("page.blockcheck.done", default="Готово") + f" ({elapsed:.1f}s)"
+        )
+        self._set_support_status(
+            tr_catalog(
+                "page.blockcheck.support_ready",
+                default="Можно подготовить обращение по этому запуску",
+            )
         )
 
         # Re-update all targets with final classifications
@@ -1014,6 +1042,50 @@ class BlockcheckPage(BasePage):
         self._progress_bar.setVisible(False)
         if hasattr(self._progress_bar, 'stop'):
             self._progress_bar.stop()
+
+    def _set_support_status(self, text: str) -> None:
+        if self._support_status_label is None:
+            return
+        self._support_status_label.setText(str(text or "").strip())
+
+    def _prepare_support_from_blockcheck(self) -> None:
+        mode_label = self._mode_combo.currentText() if self._mode_combo is not None else "BlockCheck"
+        extra_domains = self._get_extra_domains()
+
+        try:
+            feedback = prepare_blockcheck_support_request(
+                run_log_file=self._run_log_file,
+                mode_label=mode_label,
+                extra_domains=extra_domains,
+            )
+            result = feedback.result
+            if result.zip_path:
+                logger.info("Prepared BlockCheck support archive: %s", result.zip_path)
+
+            self._set_support_status(feedback.status_text)
+
+            try:
+                InfoBarHelper.success(
+                    self.window(),
+                    tr_catalog(
+                        "page.blockcheck.support_prepared_title",
+                        default="Обращение подготовлено",
+                    ),
+                    feedback.info_text,
+                )
+            except Exception:
+                pass
+        except Exception as exc:
+            logger.warning("Failed to prepare BlockCheck support bundle: %s", exc)
+            self._set_support_status("Ошибка подготовки")
+            try:
+                InfoBarHelper.warning(
+                    self.window(),
+                    tr_catalog("page.blockcheck.error", default="Ошибка выполнения"),
+                    f"Не удалось подготовить обращение:\n{exc}",
+                )
+            except Exception:
+                pass
 
     def _toggle_log_expand(self):
         """Развернуть/свернуть лог на всю страницу."""
@@ -1650,6 +1722,14 @@ class BlockcheckPage(BasePage):
             self._skip_failed_cb.setText(tr_catalog("page.blockcheck.skip_failed", language=language, default="Пропускать проблемные домены"))
             self._add_domain_btn.setText(tr_catalog("page.blockcheck.add_domain", language=language, default="Добавить"))
             self._domain_input.setPlaceholderText(tr_catalog("page.blockcheck.domain_placeholder", language=language, default="example.com"))
+            if self._prepare_support_btn is not None:
+                self._prepare_support_btn.setText(
+                    tr_catalog(
+                        "page.blockcheck.prepare_support",
+                        language=language,
+                        default="Подготовить обращение",
+                    )
+                )
             if self._strategy_tab_page is not None:
                 self._strategy_tab_page.set_ui_language(language)
             if self._diagnostics_tab_page is not None:

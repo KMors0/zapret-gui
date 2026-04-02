@@ -52,6 +52,11 @@ except ImportError:
     FluentIcon = None
     _HAS_FLUENT = False
 
+try:
+    from qfluentwidgets import SearchLineEdit
+except ImportError:
+    SearchLineEdit = LineEdit
+
 from ui.pages.base_page import BasePage
 from ui.main_window_state import AppUiState, MainWindowStateStore
 from ui.compat_widgets import ActionButton, PrimaryActionButton, ResetActionButton, SettingsRow, set_tooltip, SettingsCard
@@ -647,6 +652,7 @@ class StrategyDetailPage(BasePage):
         self._last_edit_args_icon_color = None
         self._preset_refresh_pending = False
         self._last_sort_icon_color = None
+        self._last_strategies_summary_text = None
 
     def _tr(self, key: str, default: str, **kwargs) -> str:
         return _tr_text(self._ui_language, key, default, **kwargs)
@@ -1361,19 +1367,45 @@ class StrategyDetailPage(BasePage):
         self._strategies_block.setObjectName("targetStrategiesBlock")
         self._strategies_block.setProperty("targetDisabled", False)
         self._strategies_block.setVisible(False)
-        strategies_layout = QVBoxLayout(self._strategies_block)
-        strategies_layout.setContentsMargins(0, 0, 0, 0)
-        strategies_layout.setSpacing(0)
+        strategies_host_layout = QVBoxLayout(self._strategies_block)
+        strategies_host_layout.setContentsMargins(0, 0, 0, 0)
+        strategies_host_layout.setSpacing(0)
 
-        # Поиск по стратегиям
+        self._strategies_card = SettingsCard()
+        self._strategies_card.setObjectName("targetStrategiesCard")
+        strategies_host_layout.addWidget(self._strategies_card, 1)
+
+        self._strategies_header_widget = QWidget()
+        header_row = QHBoxLayout(self._strategies_header_widget)
+        header_row.setContentsMargins(0, 0, 0, 0)
+        header_row.setSpacing(12)
+
+        header_text_layout = QVBoxLayout()
+        header_text_layout.setContentsMargins(0, 0, 0, 0)
+        header_text_layout.setSpacing(2)
+
+        self._strategies_title_label = StrongBodyLabel(
+            self._tr("page.z2_strategy_detail.tree.title", "Все стратегии")
+        )
+        header_text_layout.addWidget(self._strategies_title_label)
+
+        self._strategies_summary_label = CaptionLabel("")
+        try:
+            self._strategies_summary_label.setWordWrap(True)
+        except Exception:
+            pass
+        header_text_layout.addWidget(self._strategies_summary_label)
+
+        header_row.addLayout(header_text_layout, 1)
+        self._strategies_card.add_widget(self._strategies_header_widget)
+
+        # Поиск, фильтрация и сортировка
         self._search_bar_widget = QWidget()
         search_layout = QHBoxLayout(self._search_bar_widget)
-        search_layout.setContentsMargins(0, 0, 0, 8)
-        # Add explicit spacing between the search input and icon buttons.
-        # Previously it was 0, which made icons stick together visually.
-        search_layout.setSpacing(6)
+        search_layout.setContentsMargins(0, 0, 0, 0)
+        search_layout.setSpacing(8)
 
-        self._search_input = LineEdit()
+        self._search_input = SearchLineEdit()
         self._search_input.setPlaceholderText(
             self._tr("page.z2_strategy_detail.search.placeholder", "Поиск по имени или args...")
         )
@@ -1381,25 +1413,23 @@ class StrategyDetailPage(BasePage):
         self._search_input.textChanged.connect(self._on_search_changed)
         search_layout.addWidget(self._search_input)
 
-        # Кнопка сортировки
-        self._sort_btn = TransparentToolButton(parent=self)
-        self._sort_btn.setIconSize(QSize(16, 16))
-        self._sort_btn.setFixedSize(36, 36)
-        self._sort_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        set_tooltip(self._sort_btn, self._tr("page.z2_strategy_detail.sort.tooltip.short", "Сортировка"))
-        self._sort_btn.clicked.connect(self._show_sort_menu)
-        search_layout.addWidget(self._sort_btn)
-
         # ComboBox фильтра по технике (одиночный выбор)
         self._filter_combo = ComboBox(parent=self)
         self._filter_combo.setFixedHeight(36)
-        self._filter_combo.setFixedWidth(130)
+        self._filter_combo.setMinimumWidth(154)
         self._filter_combo.addItem(self._tr("page.z2_strategy_detail.filter.technique.all", "Все техники"))
         for label, _key in STRATEGY_TECHNIQUE_FILTERS:
             self._filter_combo.addItem(label)
         self._filter_combo.setCurrentIndex(0)
         self._filter_combo.currentIndexChanged.connect(self._on_technique_filter_changed)
         search_layout.addWidget(self._filter_combo)
+
+        # ComboBox сортировки вместо скрытого меню в маленькой кнопке
+        self._sort_combo = ComboBox(parent=self)
+        self._sort_combo.setFixedHeight(36)
+        self._sort_combo.setMinimumWidth(168)
+        self._sort_combo.currentIndexChanged.connect(self._on_sort_combo_changed)
+        search_layout.addWidget(self._sort_combo)
 
         # Кнопка редактирования args (лениво, отдельная панель)
         try:
@@ -1425,8 +1455,9 @@ class StrategyDetailPage(BasePage):
         # Initialize dynamic visuals/tooltips (sort/filter buttons).
         self._apply_theme_overrides()
         self._update_technique_filter_ui()
+        self._populate_sort_combo()
 
-        strategies_layout.addWidget(self._search_bar_widget)
+        self._strategies_card.add_widget(self._search_bar_widget)
 
         self._args_editor_dirty = False
 
@@ -1469,7 +1500,7 @@ class StrategyDetailPage(BasePage):
             pass
 
         phases_layout.addWidget(self._phase_tabbar, 1)
-        strategies_layout.addWidget(self._phases_bar_widget)
+        self._strategies_card.add_widget(self._phases_bar_widget)
 
         # Лёгкий список стратегий: item-based, без сотен QWidget в layout
         self._strategies_tree = DirectZapret2StrategiesTree(self)
@@ -1481,7 +1512,8 @@ class StrategyDetailPage(BasePage):
         self._strategies_tree.preview_requested.connect(self._on_tree_preview_requested)
         self._strategies_tree.preview_pinned_requested.connect(self._on_tree_preview_pinned_requested)
         self._strategies_tree.preview_hide_requested.connect(self._on_tree_preview_hide_requested)
-        strategies_layout.addWidget(self._strategies_tree, 1)
+        self._strategies_card.add_widget(self._strategies_tree)
+        self._update_strategies_summary()
 
         self.layout.addWidget(self._strategies_block, 1)
 
@@ -1878,6 +1910,7 @@ class StrategyDetailPage(BasePage):
         self._loaded_tcp_phase_mode = False
         self._default_strategy_order = []
         self._strategies_loaded_fully = False
+        self._update_strategies_summary()
 
     def _is_dpi_running_now(self) -> bool:
         """Best-effort check: is any winws process currently running."""
@@ -1932,6 +1965,7 @@ class StrategyDetailPage(BasePage):
                     self._strategies_tree.clear_strategies()
                 except Exception:
                     pass
+                self._update_strategies_summary()
                 log(f"StrategyDetailPage: список стратегий пуст для {self._target_key}", "INFO")
                 # Fallback display: usually handled by empty list state, but we can stop loading.
                 self._stop_loading()
@@ -2149,6 +2183,8 @@ class StrategyDetailPage(BasePage):
             search_active = False
         if search_active or self._active_filters or self._tcp_phase_mode:
             self._apply_filters()
+        else:
+            self._update_strategies_summary()
 
         if end < total:
             return
@@ -2173,6 +2209,7 @@ class StrategyDetailPage(BasePage):
                 self._strategies_tree.set_selected_strategy("none")
 
         self._refresh_scroll_range()
+        self._update_strategies_summary()
         self._restore_scroll_state(self._target_key, defer=True)
 
     def _refresh_working_marks_for_target(self) -> None:
@@ -3517,17 +3554,60 @@ class StrategyDetailPage(BasePage):
         self._update_technique_filter_ui()
         self._apply_filters()
 
+    def _sort_mode_label(self, mode: str | None = None) -> str:
+        mode_value = str(mode or self._sort_mode or "default").strip().lower() or "default"
+        if mode_value == "name_asc":
+            return self._tr("page.z2_strategy_detail.sort.name_asc", "По имени (А-Я)")
+        if mode_value == "name_desc":
+            return self._tr("page.z2_strategy_detail.sort.name_desc", "По имени (Я-А)")
+        return self._tr("page.z2_strategy_detail.sort.default", "По умолчанию")
+
     def _build_sort_tooltip(self) -> str:
         mode = str(self._sort_mode or "default").strip().lower() or "default"
-        if mode == "name_asc":
-            label = self._tr("page.z2_strategy_detail.sort.name_asc", "По имени (А-Я)")
-        elif mode == "name_desc":
-            label = self._tr("page.z2_strategy_detail.sort.name_desc", "По имени (Я-А)")
-        else:
-            label = self._tr("page.z2_strategy_detail.sort.default", "По умолчанию")
+        label = self._sort_mode_label(mode)
         return self._tr("page.z2_strategy_detail.sort.tooltip", "Сортировка: {label}", label=label)
 
+    def _populate_sort_combo(self) -> None:
+        combo = getattr(self, "_sort_combo", None)
+        if combo is None:
+            return
+
+        entries = [
+            ("default", self._tr("page.z2_strategy_detail.sort.default", "По умолчанию")),
+            ("name_asc", self._tr("page.z2_strategy_detail.sort.name_asc", "По имени (А-Я)")),
+            ("name_desc", self._tr("page.z2_strategy_detail.sort.name_desc", "По имени (Я-А)")),
+        ]
+
+        combo.blockSignals(True)
+        combo.clear()
+        for mode, label in entries:
+            combo.addItem(label)
+            try:
+                combo.setItemData(combo.count() - 1, mode)
+            except Exception:
+                pass
+        combo.blockSignals(False)
+        self._update_sort_button_ui()
+
     def _update_sort_button_ui(self) -> None:
+        combo = getattr(self, "_sort_combo", None)
+        if combo is not None:
+            target_mode = str(self._sort_mode or "default").strip().lower() or "default"
+            combo.blockSignals(True)
+            match_index = 0
+            try:
+                for i in range(combo.count()):
+                    if str(combo.itemData(i) or "").strip().lower() == target_mode:
+                        match_index = i
+                        break
+            except Exception:
+                pass
+            try:
+                combo.setCurrentIndex(match_index)
+            except Exception:
+                pass
+            combo.blockSignals(False)
+
         btn = getattr(self, "_sort_btn", None)
         if not btn:
             return
@@ -3545,6 +3625,25 @@ class StrategyDetailPage(BasePage):
             set_tooltip(btn, self._build_sort_tooltip())
         except Exception:
             pass
+
+    def _on_sort_combo_changed(self, index: int) -> None:
+        combo = getattr(self, "_sort_combo", None)
+        if combo is None:
+            return
+
+        mode = "default"
+        try:
+            mode = str(combo.itemData(index) or "default").strip().lower() or "default"
+        except Exception:
+            pass
+
+        if mode == self._sort_mode:
+            return
+
+        self._sort_mode = mode
+        if self._target_key:
+            self._save_target_sort(self._target_key, self._sort_mode)
+        self._apply_sort()
 
     def _on_technique_filter_changed(self, index: int) -> None:
         """Обработчик выбора техники в ComboBox фильтра."""
@@ -3572,6 +3671,61 @@ class StrategyDetailPage(BasePage):
         combo.blockSignals(True)
         combo.setCurrentIndex(target_idx)
         combo.blockSignals(False)
+
+    def _update_strategies_summary(self) -> None:
+        label = getattr(self, "_strategies_summary_label", None)
+        if label is None:
+            return
+
+        tree = getattr(self, "_strategies_tree", None)
+        total = tree.total_strategy_count() if tree is not None else 0
+        visible = tree.visible_strategy_count() if tree is not None else 0
+
+        if total <= 0:
+            text = self._tr(
+                "page.z2_strategy_detail.tree.summary.empty",
+                "Список пока пуст. Стратегии появятся после загрузки target-а.",
+            )
+        else:
+            text = self._tr(
+                "page.z2_strategy_detail.tree.summary.counts",
+                "Показано {visible} из {total}",
+                visible=visible,
+                total=total,
+            )
+            suffix: list[str] = []
+            if self._tcp_phase_mode and self._active_phase_key:
+                suffix.append(
+                    self._tr(
+                        "page.z2_strategy_detail.tree.summary.phase",
+                        "фаза: {phase}",
+                        phase=str(self._active_phase_key).upper(),
+                    )
+                )
+            elif self._active_filters:
+                active_key = next(iter(self._active_filters), "")
+                active_label = ""
+                for label_text, key in STRATEGY_TECHNIQUE_FILTERS:
+                    if key == active_key:
+                        active_label = label_text
+                        break
+                if active_label:
+                    suffix.append(
+                        self._tr(
+                            "page.z2_strategy_detail.tree.summary.technique",
+                            "техника: {technique}",
+                            technique=active_label,
+                        )
+                    )
+            if getattr(self, "_search_input", None) is not None and self._search_input.text().strip():
+                suffix.append(self._tr("page.z2_strategy_detail.tree.summary.search", "поиск активен"))
+            if suffix:
+                text = f"{text} | {' | '.join(suffix)}"
+
+        if text == self._last_strategies_summary_text:
+            return
+        self._last_strategies_summary_text = text
+        label.setText(text)
 
     def _on_phase_tab_changed(self, route_key: str) -> None:
         """TCP multi-phase: handler for Pivot currentItemChanged signal."""
@@ -3617,6 +3771,7 @@ class StrategyDetailPage(BasePage):
                 pass
             self._strategies_tree.apply_phase_filter(search_text, self._active_phase_key)
             self._sync_tree_selection_to_active_phase()
+            self._update_strategies_summary()
             return
 
         try:
@@ -3628,6 +3783,7 @@ class StrategyDetailPage(BasePage):
         sid = self._selected_strategy_id or self._current_strategy_id or "none"
         if sid and self._strategies_tree.has_strategy(sid) and self._strategies_tree.is_strategy_visible(sid):
             self._strategies_tree.set_selected_strategy(sid)
+        self._update_strategies_summary()
 
     def _sync_tree_selection_to_active_phase(self) -> None:
         """TCP multi-phase: restores highlighted row for the currently active phase."""
@@ -3690,6 +3846,7 @@ class StrategyDetailPage(BasePage):
         self._strategies_tree.set_sort_mode(self._sort_mode)
         self._strategies_tree.apply_sort()
         self._update_sort_button_ui()
+        self._update_strategies_summary()
         # Sorting (takeChildren/addChild) may reset selection in Qt; restore it.
         sid = self._selected_strategy_id or self._current_strategy_id or "none"
         if sid and self._strategies_tree.has_strategy(sid):
@@ -3789,8 +3946,16 @@ class StrategyDetailPage(BasePage):
                 self._tr("page.z2_strategy_detail.search.placeholder", "Поиск по имени или args...")
             )
 
+        if getattr(self, "_strategies_title_label", None) is not None:
+            self._strategies_title_label.setText(
+                self._tr("page.z2_strategy_detail.tree.title", "Все стратегии")
+            )
+
         if getattr(self, "_sort_btn", None) is not None:
             self._update_sort_button_ui()
+
+        if getattr(self, "_sort_combo", None) is not None:
+            self._populate_sort_combo()
 
         if getattr(self, "_filter_combo", None) is not None:
             idx = self._filter_combo.currentIndex()
@@ -3810,6 +3975,7 @@ class StrategyDetailPage(BasePage):
                     "Аргументы стратегии для выбранного target'а",
                 ),
             )
+        self._update_strategies_summary()
 
         if getattr(self, "_send_toggle_row", None) is not None:
             self._send_toggle_row.set_texts(

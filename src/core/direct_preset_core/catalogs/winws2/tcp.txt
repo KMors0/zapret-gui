@@ -13,6 +13,60 @@ name = hostfakesplit_multi + syndata
 --lua-desync=syndata:blob=stun_pat
 --lua-desync=hostfakesplit_multi:hosts=google.com,vimeo.com:tcp_ts=-1000:tcp_md5:repeats=2
 
+[fakemultisplit_simple]
+name = FakeMultiSplit Simple
+author = Custom
+description = Базовый fakemultisplit с одной точкой разреза и фейковыми кусками из fake TLS
+--lua-desync=fakemultisplit:fake_blob=fake_default_tls:pos=1
+
+[fakemultisplit_midsld]
+name = FakeMultiSplit MidSLD
+author = Custom
+description = FakeMultiSplit с двумя разрезами: в начале и по середине второго уровня домена
+--lua-desync=fakemultisplit:fake_blob=fake_default_tls:pos=1,midsld
+
+[fakemultisplit_google_seqovl_211]
+name = FakeMultiSplit Google seqovl 211
+author = Custom
+blobs = tls_google
+description = FakeMultiSplit с фейковым Google TLS и перекрытием последовательности 211
+--lua-desync=fakemultisplit:fake_blob=tls_google:pos=1,midsld:seqovl=211:seqovl_pattern=tls_google
+
+[fakemultisplit_google_ultra]
+name = FakeMultiSplit Google Ultra
+author = Custom
+label = experimental
+blobs = tls_google
+description = Сложный FakeMultiSplit с несколькими точками разреза, badseq на фейках и модификацией TLS
+--lua-desync=fakemultisplit:fake_blob=tls_google:pos=1,host+2,midsld,sniext+1,endhost-1:repeats=6:tcp_ack=-66000:seqovl=652:seqovl_pattern=tls_google:tls_mod=rnd,rndsni,dupsid
+
+[fakemultidisorder_simple]
+name = FakeMultiDisorder Simple
+author = Custom
+description = Базовый fakemultidisorder: сначала один фейковый сегмент, потом обратная отправка реальных частей
+--lua-desync=fakemultidisorder:fake_blob=fake_default_tls:pos=1
+
+[fakemultidisorder_fakecount_2]
+name = FakeMultiDisorder fake_count 2
+author = Custom
+description = Два начальных фейковых сегмента перед обратной отправкой реальных частей
+--lua-desync=fakemultidisorder:fake_blob=fake_default_tls:pos=1,midsld:fake_count=2
+
+[fakemultidisorder_google_host_seqovl]
+name = FakeMultiDisorder Google host seqovl
+author = Custom
+blobs = tls_google
+description = FakeMultiDisorder с Google TLS и seqovl по маркеру host
+--lua-desync=fakemultidisorder:fake_blob=tls_google:pos=1,midsld:seqovl=host:seqovl_pattern=tls_google
+
+[fakemultidisorder_google_ultra]
+name = FakeMultiDisorder Google Ultra
+author = Custom
+label = experimental
+blobs = tls_google
+description = Фейкует все части, добавляет badseq и AutoTTL только для фейков, затем отправляет реальные сегменты в disorder-порядке
+--lua-desync=fakemultidisorder:fake_blob=tls_google:pos=1,host+2,midsld,sniext+1,endhost-1:fake_all:repeats=6:tcp_ack=-66000:ip_autottl=-1,3-20:ip6_autottl=-1,3-20:seqovl=host:seqovl_pattern=tls_google:tls_mod=rnd,rndsni,dupsid
+
 [fake_stun_multisplit_2_32]
 name = fake + stun + multisplit pos 2,32
 --lua-desync=fake:blob=stun_pat:badsum:payload=all

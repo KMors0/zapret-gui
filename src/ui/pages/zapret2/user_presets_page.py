@@ -58,7 +58,7 @@ try:
         BodyLabel, CaptionLabel, StrongBodyLabel, SubtitleLabel,
         PushButton as FluentPushButton, PrimaryPushButton, ToolButton, PrimaryToolButton,
         MessageBox, InfoBar, MessageBoxBase, TransparentToolButton, TransparentPushButton, FluentIcon,
-        RoundMenu, Action, ListView,
+        RoundMenu, Action, ListView, BreadcrumbBar,
     )
     _HAS_FLUENT_LABELS = True
 except ImportError:
@@ -79,6 +79,7 @@ except ImportError:
     RoundMenu = None
     Action = None
     ListView = QListView
+    BreadcrumbBar = None
     _HAS_FLUENT_LABELS = False
 
 
@@ -434,8 +435,10 @@ class _LinkedWheelListView(ListView):
         at_bottom = scrollbar.value() >= scrollbar.maximum()
 
         if (delta > 0 and at_top) or (delta < 0 and at_bottom):
-            # Let parent scroll area handle wheel at boundaries.
-            e.ignore()
+            # User presets pages use the inner list as the single source of scrolling.
+            # Do not bubble wheel events to BasePage, otherwise the outer page starts
+            # scrolling too and we get a confusing double-scroll behavior.
+            e.accept()
             return
 
         super().wheelEvent(e)
@@ -1233,29 +1236,38 @@ class Zapret2UserPresetsPage(BasePage):
             title_key="page.z2_user_presets.title",
         )
 
+        self._breadcrumb = None
         self._back_btn = None
         self._configs_title_label = None
         self._get_configs_btn = None
 
-        # Back navigation (breadcrumb — to Zapret2DirectControlPage)
+        # Верхняя навигация: fluent breadcrumb как на соседних страницах.
         try:
-            tokens = get_theme_tokens()
-            _back_btn = TransparentPushButton()
-            _back_btn.setText(self._tr("page.z2_user_presets.back.control", "Управление"))
-            _back_btn.setIcon(qta.icon("fa5s.chevron-left", color=tokens.fg_muted))
-            _back_btn.setIconSize(QSize(12, 12))
-            _back_btn.clicked.connect(self.back_clicked.emit)
-            self._back_btn = _back_btn
-            _back_row_layout = QHBoxLayout()
-            _back_row_layout.setContentsMargins(0, 0, 0, 0)
-            _back_row_layout.setSpacing(0)
-            _back_row_layout.addWidget(_back_btn)
-            _back_row_layout.addStretch()
-            _back_row_widget = QWidget()
-            _back_row_widget.setLayout(_back_row_layout)
-            self.layout.insertWidget(0, _back_row_widget)
+            if BreadcrumbBar is None:
+                raise RuntimeError("BreadcrumbBar unavailable")
+            self._breadcrumb = BreadcrumbBar()
+            self._rebuild_breadcrumb()
+            self._breadcrumb.currentItemChanged.connect(self._on_breadcrumb_item_changed)
+            self.layout.insertWidget(0, self._breadcrumb)
         except Exception:
-            pass
+            try:
+                tokens = get_theme_tokens()
+                _back_btn = TransparentPushButton()
+                _back_btn.setText(self._tr("page.z2_user_presets.back.control", "Управление"))
+                _back_btn.setIcon(qta.icon("fa5s.chevron-left", color=tokens.fg_muted))
+                _back_btn.setIconSize(QSize(12, 12))
+                _back_btn.clicked.connect(self.back_clicked.emit)
+                self._back_btn = _back_btn
+                _back_row_layout = QHBoxLayout()
+                _back_row_layout.setContentsMargins(0, 0, 0, 0)
+                _back_row_layout.setSpacing(0)
+                _back_row_layout.addWidget(_back_btn)
+                _back_row_layout.addStretch()
+                _back_row_widget = QWidget()
+                _back_row_widget.setLayout(_back_row_layout)
+                self.layout.insertWidget(0, _back_row_widget)
+            except Exception:
+                pass
 
         self._presets_model: Optional[_PresetListModel] = None
         self._presets_delegate: Optional[_PresetListDelegate] = None
@@ -1293,6 +1305,36 @@ class Zapret2UserPresetsPage(BasePage):
     def _tr(self, key: str, default: str, **kwargs) -> str:
         return _tr_text(key, self._ui_language, default, **kwargs)
 
+    def _current_breadcrumb_title(self) -> str:
+        try:
+            if self._is_orchestra_backend():
+                return self._tr("page.z2_user_presets.title.orchestra", "Мои пресеты (Оркестратор Z2)")
+        except Exception:
+            pass
+        return self._tr("page.z2_user_presets.title", "Мои пресеты")
+
+    def _rebuild_breadcrumb(self) -> None:
+        if self._breadcrumb is None:
+            return
+        self._breadcrumb.blockSignals(True)
+        try:
+            self._breadcrumb.clear()
+            self._breadcrumb.addItem(
+                "control",
+                self._tr("page.z2_user_presets.back.control", "Управление"),
+            )
+            self._breadcrumb.addItem(
+                "presets",
+                self._current_breadcrumb_title(),
+            )
+        finally:
+            self._breadcrumb.blockSignals(False)
+
+    def _on_breadcrumb_item_changed(self, key: str) -> None:
+        self._rebuild_breadcrumb()
+        if key == "control":
+            self.back_clicked.emit()
+
     def _is_orchestra_backend(self) -> bool:
         try:
             from strategy_menu.launch_method_store import get_strategy_launch_method
@@ -1318,6 +1360,7 @@ class Zapret2UserPresetsPage(BasePage):
                 self.title_label.setText(self._tr("page.z2_user_presets.title", "Мои пресеты"))
                 if self.subtitle_label is not None:
                     self.subtitle_label.setText("")
+            self._rebuild_breadcrumb()
         except Exception:
             pass
 
@@ -1621,6 +1664,7 @@ class Zapret2UserPresetsPage(BasePage):
 
     def showEvent(self, event):
         super().showEvent(event)
+        self._rebuild_breadcrumb()
         if not self._ui_initialized:
             if not self._lazy_show_scheduled:
                 self._lazy_show_scheduled = True
@@ -1812,6 +1856,12 @@ class Zapret2UserPresetsPage(BasePage):
     def _build_ui(self):
         tokens = get_theme_tokens()
         semantic = get_semantic_palette(tokens.theme_name)
+
+        # This page should scroll only inside the presets list.
+        # The outer BasePage scroll creates a second scrollbar and makes wheel
+        # scrolling jump between two containers.
+        self.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.verticalScrollBar().hide()
 
         # Presets community link
         configs_card = SettingsCard()
@@ -2895,7 +2945,9 @@ class Zapret2UserPresetsPage(BasePage):
 
         self._apply_mode_labels()
 
-        if self._back_btn is not None:
+        if self._breadcrumb is not None:
+            self._rebuild_breadcrumb()
+        elif self._back_btn is not None:
             self._back_btn.setText(self._tr("page.z2_user_presets.back.control", "Управление"))
 
         if self._configs_title_label is not None:

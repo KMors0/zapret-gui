@@ -374,9 +374,9 @@ class MainWindowUI:
     def build_ui(self, width: int, height: int):
         """Build UI: create pages and populate FluentWindow navigation sidebar.
 
-        Note: window geometry (size/position) is restored in __init__ via
-        restore_window_geometry() before this is called — do NOT resize here,
-        that would overwrite the saved geometry.
+        Note: window geometry (size/position) is restored in __init__ via the
+        dedicated window geometry controller before this is called — do NOT
+        resize here, that would overwrite the saved geometry.
         """
         self.pages: dict[PageName, QWidget] = {}
         self._page_aliases: dict[PageName, PageName] = dict(_PAGE_ALIASES)
@@ -451,7 +451,7 @@ class MainWindowUI:
 
         Qt widgets must be created on the main GUI thread, so we can't move page
         construction to worker threads. Instead, we periodically process pending
-        paint/timer events so startup splash animations remain smooth.
+        paint/timer events so окно успевало плавно дорисовываться во время старта.
         """
         try:
             self._startup_ui_pump_counter = int(getattr(self, "_startup_ui_pump_counter", 0)) + 1

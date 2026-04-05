@@ -1,5 +1,5 @@
 # ui/pages/dpi_settings_page.py
-"""Страница настроек DPI"""
+"""Страница настроек Zapret"""
 
 from PyQt6.QtCore import Qt, QPropertyAnimation, QEasingCurve, pyqtProperty, QRectF, pyqtSignal, QTimer, QEvent
 from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel,
@@ -888,14 +888,14 @@ class Win11ComboRow(QWidget):
 
 
 class DpiSettingsPage(BasePage):
-    """Страница настроек DPI"""
+    """Страница настроек Zapret"""
 
     launch_method_changed = pyqtSignal(str)
     filters_changed = pyqtSignal()  # Сигнал при изменении фильтров
     
     def __init__(self, parent=None):
         super().__init__(
-            "Настройки DPI",
+            "Настройки Zapret",
             "Параметры обхода блокировок",
             parent,
             title_key="page.dpi_settings.title",
@@ -1235,7 +1235,7 @@ class DpiSettingsPage(BasePage):
             self._load_filter_settings()
 
         except Exception as e:
-            log(f"Ошибка загрузки настроек DPI: {e}", "WARNING")
+            log(f"Ошибка загрузки настроек Zapret: {e}", "WARNING")
     
     def _update_method_selection(self, method: str):
         """Обновляет визуальное состояние выбора метода"""
@@ -1475,11 +1475,11 @@ class DpiSettingsPage(BasePage):
         return None
     
     def _restart_dpi_async(self):
-        """Асинхронно перезапускает DPI если он запущен"""
+        """Асинхронно перезапускает Zapret если он запущен"""
         try:
             app = self._get_app()
             if not app or not hasattr(app, 'dpi_controller'):
-                log("DPI контроллер не найден для перезапуска", "DEBUG")
+                log("Контроллер для перезапуска не найден", "DEBUG")
                 return
 
             # Для режима direct_zapret2 используем унифицированный механизм
@@ -1494,10 +1494,10 @@ class DpiSettingsPage(BasePage):
             # Для остальных режимов (orchestra, zapret1, bat) - старая логика
             # Проверяем, запущен ли процесс
             if not app.dpi_starter.check_process_running_wmi(silent=True):
-                log("DPI не запущен, перезапуск не требуется", "DEBUG")
+                log("Zapret не запущен, перезапуск не требуется", "DEBUG")
                 return
 
-            log("Перезапуск DPI после изменения настроек...", "INFO")
+            log("Перезапуск Zapret после изменения настроек...", "INFO")
 
             # Асинхронно останавливаем
             app.dpi_controller.stop_dpi_async()
@@ -1510,10 +1510,10 @@ class DpiSettingsPage(BasePage):
             self._restart_timer.start(300)  # Проверяем каждые 300мс
 
         except Exception as e:
-            log(f"Ошибка перезапуска DPI: {e}", "ERROR")
+            log(f"Ошибка перезапуска Zapret: {e}", "ERROR")
     
     def _check_stopped_and_restart(self):
-        """Проверяет остановку DPI и запускает заново"""
+        """Проверяет остановку Zapret и запускает заново"""
         try:
             app = self._get_app()
             if not app:
@@ -1525,7 +1525,7 @@ class DpiSettingsPage(BasePage):
             # Максимум 30 проверок (9 секунд)
             if self._restart_check_count > 30:
                 self._restart_timer.stop()
-                log("⚠️ Таймаут ожидания остановки DPI", "WARNING")
+                log("⚠️ Таймаут ожидания остановки Zapret", "WARNING")
                 self._start_dpi_after_stop()
                 return
             
@@ -1541,7 +1541,7 @@ class DpiSettingsPage(BasePage):
             log(f"Ошибка проверки остановки: {e}", "ERROR")
     
     def _start_dpi_after_stop(self):
-        """Запускает DPI после остановки"""
+        """Запускает Zapret после остановки"""
         try:
             app = self._get_app()
             if not app or not hasattr(app, 'dpi_controller'):
@@ -1593,10 +1593,10 @@ class DpiSettingsPage(BasePage):
                 # BAT режим
                 app.dpi_controller.start_dpi_async()
                 
-            log("✅ DPI перезапущен с новыми настройками", "INFO")
+            log("✅Zapret перезапущен с новыми настройками", "INFO")
             
         except Exception as e:
-            log(f"Ошибка запуска DPI: {e}", "ERROR")
+            log(f"Ошибка запуска Zapret: {e}", "ERROR")
         
     def _load_filter_settings(self):
         """Загружает настройки фильтров"""

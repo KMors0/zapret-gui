@@ -510,7 +510,7 @@ class Zapret2StrategiesPageNew(BasePage):
         self.strategies_changed.emit(selections)
 
     def _apply_changes(self):
-        """Применяет изменения - перезапускает DPI если запущен"""
+        """Применяет изменения - перезапускает Zapret если запущен"""
         from dpi.zapret2_core_restart import trigger_dpi_reload
         trigger_dpi_reload(
             self.parent_app,
@@ -667,7 +667,7 @@ class Zapret2StrategiesPageNew(BasePage):
 
     def update_current_strategy(self, name: str):
         """Совместимость: обновляет отображение текущей стратегии"""
-        if name and name != "Автостарт DPI отключен":
+        if name and name != "Автозапуск Zapret GUI отключен":
             self.current_strategy_label.setText(name)
         else:
             self.current_strategy_label.setText(

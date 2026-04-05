@@ -290,11 +290,11 @@ class InitializationManager:
                 ui_callback=self._safe_ui_update,  # безопасный вызов в UI
                 app_instance=self.app
             )
-            log("DPI Starter инициализирован", "INFO")
+            log("Zapret Starter инициализирован", "INFO")
             self.init_tasks_completed.add('dpi_starter')
         except Exception as e:
-            log(f"Ошибка инициализации DPI Starter: {e}", "❌ ERROR")
-            self.app.set_status(f"Ошибка DPI: {e}")
+            log(f"Ошибка инициализации Zapret Starter: {e}", "❌ ERROR")
+            self.app.set_status(f"Ошибка winws: {e}")
 
     def _safe_ui_update(self, running: bool):
         """Безопасное обновление UI через UI Manager"""
@@ -377,10 +377,10 @@ class InitializationManager:
         try:
             from dpi.dpi_controller import DPIController
             self.app.dpi_controller = DPIController(self.app)
-            log("DPI Controller инициализирован", "INFO")
+            log("DPI (winws) Controller инициализирован", "INFO")
             self.init_tasks_completed.add('dpi_controller')
         except Exception as e:
-            log(f"Ошибка инициализации DPI Controller: {e}", "❌ ERROR")
+            log(f"Ошибка инициализации DPI (winws) Controller: {e}", "❌ ERROR")
             self.app.set_status(f"Ошибка контроллера: {e}")
 
     def _init_menu(self):
@@ -438,7 +438,7 @@ class InitializationManager:
 
         # orchestra режим не требует выбора стратегии - работает автоматически
 
-        # Запускаем DPI
+        # Запускаем Zapret
         self.app.dpi_controller.start_dpi_async()
 
     def _show_strategy_required_warning(self, for_bat: bool = False) -> None:
@@ -473,7 +473,7 @@ class InitializationManager:
     # ═══════════════════════════════════════════════════════════════════
     
     def _init_core_managers(self):
-        """Инициализация ядра: DPI Manager и обязательные файлы."""
+        """Инициализация ядра: DPI (winws) Manager и обязательные файлы."""
         try:
             import time as _t
             t0 = _t.perf_counter()
@@ -730,7 +730,7 @@ class InitializationManager:
         return 500
 
     def _get_dpi_autostart_delay_ms(self, launch_method: str) -> int:
-        """Возвращает задержку перед автозапуском DPI по режиму."""
+        """Возвращает задержку перед автозапуском Zapret по режиму."""
         if launch_method == "direct_zapret2":
             return 75
         return 1000
@@ -915,7 +915,7 @@ class InitializationManager:
         # 1. Проверяем включен ли автозапуск
         from config import get_dpi_autostart
         if not get_dpi_autostart():
-            log("Автозапуск DPI отключен", "INFO")
+            log("Автозапуск Zapret отключен", "INFO")
             self.app.set_status("Готово")
             return
 

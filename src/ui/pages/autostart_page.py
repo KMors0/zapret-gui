@@ -320,7 +320,7 @@ class AutostartPage(BasePage):
     # Сигналы для связи с main.py
     autostart_enabled = pyqtSignal()
     autostart_disabled = pyqtSignal()
-    navigate_to_dpi_settings = pyqtSignal()  # Переход на страницу настроек DPI
+    navigate_to_dpi_settings = pyqtSignal()  # Переход на страницу настроек Zapret
 
     def __init__(self, parent=None):
         super().__init__(
@@ -606,11 +606,11 @@ class AutostartPage(BasePage):
         # GUI автозапуск
         self.gui_option = AutostartOptionCard(
             "fa5s.desktop",
-            self._tr("page.autostart.option.gui.title", "Автозапуск программы Zapret"),
+            self._tr("page.autostart.option.gui.title", "Автозапуск Zapret GUI"),
             self._tr(
                 "page.autostart.option.gui.desc",
-                "Запускает главное окно программы при входе в Windows. "
-                "Вы сможете управлять DPI из системного трея.",
+                "Открывает главное окно при входе в Windows. "
+                "Вы сможете управлять Zapret из системного трея.",
             ),
             accent=True
         )
@@ -649,7 +649,7 @@ class AutostartPage(BasePage):
             self._tr("page.autostart.option.logon.title", "Задача при входе пользователя"),
             self._tr(
                 "page.autostart.option.logon.desc",
-                "Создает задачу планировщика для запуска DPI при входе пользователя в систему.",
+                "Создает задачу планировщика для запуска Zapret GUI при входе пользователя в систему.",
             )
         )
         self.logon_option.clicked.connect(self._on_logon_autostart)
@@ -662,7 +662,7 @@ class AutostartPage(BasePage):
             self._tr("page.autostart.option.boot.title", "Задача при загрузке системы"),
             self._tr(
                 "page.autostart.option.boot.desc",
-                "Создает задачу планировщика для запуска DPI при загрузке Windows (до входа пользователя).",
+                "Создает задачу планировщика для запуска Zapret GUI при загрузке Windows (до входа пользователя).",
             )
         )
         self.boot_option.clicked.connect(self._on_boot_autostart)
@@ -816,7 +816,7 @@ class AutostartPage(BasePage):
             self._tr(
                 "page.autostart.option.gui.desc",
                 "Запускает главное окно программы при входе в Windows. "
-                "Вы сможете управлять DPI из системного трея.",
+                "Вы сможете управлять Zapret GUI из системного трея.",
             ),
         )
         self.service_option.set_texts(
@@ -834,14 +834,14 @@ class AutostartPage(BasePage):
             self._tr("page.autostart.option.logon.title", "Задача при входе пользователя"),
             self._tr(
                 "page.autostart.option.logon.desc",
-                "Создает задачу планировщика для запуска DPI при входе пользователя в систему.",
+                "Создает задачу планировщика для запуска Zapret GUI при входе пользователя в систему.",
             ),
         )
         self.boot_option.set_texts(
             self._tr("page.autostart.option.boot.title", "Задача при загрузке системы"),
             self._tr(
                 "page.autostart.option.boot.desc",
-                "Создает задачу планировщика для запуска DPI при загрузке Windows (до входа пользователя).",
+                "Создает задачу планировщика для запуска Zapret GUI при загрузке Windows (до входа пользователя).",
             ),
         )
         self._tip_text_label.setText(

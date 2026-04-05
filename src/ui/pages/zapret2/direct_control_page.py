@@ -523,7 +523,7 @@ class Zapret2DirectControlPage(BasePage):
 
         auto_row = SettingsRow(
             "fa5s.bolt",
-            tr_catalog("page.z2_control.setting.autostart.title", language=self._ui_language, default="Автозагрузка DPI"),
+            tr_catalog("page.z2_control.setting.autostart.title", language=self._ui_language, default="Автозапуск Zapret GUI"),
             tr_catalog(
                 "page.z2_control.setting.autostart.desc",
                 language=self._ui_language,
@@ -996,10 +996,10 @@ class Zapret2DirectControlPage(BasePage):
             msg = (
                 "DPI будет включаться автоматически при старте программы"
                 if enabled
-                else "Автозагрузка DPI отключена"
+                else "Автозапуск Zapret GUI отключена"
             )
             self._set_status(msg)
-            InfoBar.success(title="Автозагрузка DPI", content=msg, parent=self.window())
+            InfoBar.success(title="Автозапуск Zapret GUI", content=msg, parent=self.window())
         finally:
             self._sync_program_settings()
 

@@ -2,7 +2,7 @@ from PyQt6.QtCore import QObject
 from log import log
 
 class DPIManager(QObject):
-    """⚡ Упрощенный менеджер для управления DPI операциями"""
+    """⚡ Упрощенный менеджер для управления Dоперациями"""
     
     def __init__(self, app_instance):
         super().__init__()
@@ -10,11 +10,11 @@ class DPIManager(QObject):
         self._autostart_initiated = False
 
     def delayed_dpi_start(self) -> None:
-        """⚡ Быстрый автозапуск DPI при старте приложения"""
+        """⚡ Быстрый автозапуск Zapret при старте приложения"""
         
         # Защита от двойного вызова
         if self._autostart_initiated:
-            log("Автозапуск DPI уже выполнен", "DEBUG")
+            log("Автозапуск Zapret уже выполнен", "DEBUG")
             return
         
         self._autostart_initiated = True
@@ -22,7 +22,7 @@ class DPIManager(QObject):
         # 1. Проверяем, включен ли автозапуск
         from config import get_dpi_autostart
         if not get_dpi_autostart():
-            log("Автозапуск DPI отключён", "INFO")
+            log("Автозапуск Zapret отключён", "INFO")
             self._update_ui(running=False)
             return
 

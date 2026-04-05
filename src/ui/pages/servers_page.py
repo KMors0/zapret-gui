@@ -1778,14 +1778,14 @@ class ServersPage(BasePage):
         self.update_card.show_download_error()
 
     def _restart_dpi_after_update(self):
-        """Перезапуск DPI после временной остановки для скачивания обновления."""
+        """Перезапуск Zapret после временной остановки для скачивания обновления."""
         try:
             win = self.window()
             if hasattr(win, 'dpi_controller') and win.dpi_controller:
-                log("🔄 Перезапуск DPI после скачивания обновления", "🔁 UPDATE")
+                log("🔄 Перезапуск Zapret после скачивания обновления", "🔁 UPDATE")
                 win.dpi_controller.restart_dpi_async()
         except Exception as e:
-            log(f"Не удалось перезапустить DPI: {e}", "❌ ERROR")
+            log(f"Не удалось перезапустить Zapret: {e}", "❌ ERROR")
 
     def _dismiss_update(self):
         log("Обновление отложено пользователем", "🔄 UPDATE")

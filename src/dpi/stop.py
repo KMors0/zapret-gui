@@ -14,7 +14,7 @@ if TYPE_CHECKING:
 def stop_dpi(app: "LupiDPIApp"):
     """Останавливает процесс winws*.exe через Win API"""
     try:
-        log("======================== Stop DPI ========================", level="START")
+        log("======================== Stop Zapret ========================", level="START")
         
         # Проверяем метод запуска
         from strategy_menu import get_strategy_launch_method
@@ -34,7 +34,7 @@ def stop_dpi(app: "LupiDPIApp"):
 
 
 def stop_dpi_direct(app: "LupiDPIApp"):
-    """Останавливает DPI в Direct режиме через Win API"""
+    """Останавливает Zapret в Direct режиме через Win API"""
     try:
         # Проверяем, запущен ли процесс
         if not app.dpi_starter.check_process_running_wmi(silent=True):
@@ -93,9 +93,9 @@ def stop_dpi_direct(app: "LupiDPIApp"):
 
 
 def stop_dpi_universal(app: "LupiDPIApp"):
-    """Универсальная остановка DPI через Win API (для BAT режима)"""
+    """Универсальная остановка Zapret через Win API (для BAT режима)"""
     try:
-        log("======================== Stop DPI (Universal Win API) ========================", level="START")
+        log("======================== Stop Zapret (Universal Win API) ========================", level="START")
 
         # Проверяем, запущен ли процесс
         if not app.dpi_starter.check_process_running_wmi(silent=True):

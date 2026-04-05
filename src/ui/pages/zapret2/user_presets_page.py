@@ -1629,7 +1629,7 @@ class Zapret2UserPresetsPage(BasePage):
         if self._manager is None or self._manager_backend != backend:
             preset_manager_cls = self._import_orchestra_attr("", "PresetManager")
 
-            # UI: do not restart DPI here; MainWindow handles restart via preset_switched.
+            # UI: do not restart Zapret here; MainWindow handles restart via preset_switched.
             self._manager = preset_manager_cls()
             self._manager_backend = backend
         return self._manager
@@ -2899,7 +2899,7 @@ class Zapret2UserPresetsPage(BasePage):
             while widget:
                 if hasattr(widget, "dpi_controller"):
                     widget.dpi_controller.restart_dpi_async()
-                    log("DPI перезапущен после смены пресета", "INFO")
+                    log("Zapret перезапущен после смены пресета", "INFO")
                     return
                 widget = widget.parent()
 
@@ -2907,11 +2907,11 @@ class Zapret2UserPresetsPage(BasePage):
             for w in QApplication.topLevelWidgets():
                 if hasattr(w, "dpi_controller"):
                     w.dpi_controller.restart_dpi_async()
-                    log("DPI перезапущен после смены пресета", "INFO")
+                    log("Zapret перезапущен после смены пресета", "INFO")
                     return
 
         except Exception as e:
-            log(f"Ошибка перезапуска DPI: {e}", "ERROR")
+            log(f"Ошибка перезапуска Zapret: {e}", "ERROR")
 
     def _open_presets_info(self):
         """Открывает страницу с информацией о пресетах."""

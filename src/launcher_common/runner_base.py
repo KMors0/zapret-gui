@@ -116,7 +116,7 @@ class StrategyRunnerBase(ABC):
         """
         Starts strategy directly from existing preset file.
 
-        This is the preferred method for launching DPI in the current
+        This is the preferred method for launching Zapret in the current
         preset-based direct architecture.
 
         Concrete runners must implement this explicitly. Preset launch is the

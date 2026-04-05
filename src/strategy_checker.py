@@ -1,6 +1,6 @@
 # strategy_checker.py
 """
-Модуль для проверки и анализа текущей стратегии DPI
+Модуль для проверки и анализа текущей стратегии Zapret
 Поддерживает прямой запуск (direct_zapret1/2/orchestra) и оркестр
 """
 
@@ -213,7 +213,7 @@ class StrategyChecker:
                 l3 = arg.split('=', 1)[1]
                 analysis['filters'].append(f"L3:{l3}")
             
-            # DPI техники (ключевые!)
+            # Техники обхода DPI (ключевые!)
             elif arg.startswith('--dpi-desync='):
                 technique = arg.split('=', 1)[1]
                 analysis['dpi_techniques'].append(f"desync:{technique}")
@@ -317,9 +317,9 @@ class StrategyChecker:
             if len(details['ipsets']) > 3:
                 lines.append(f"      ... и еще {len(details['ipsets']) - 3}")
         
-        # DPI техники (ключевая информация!)
+        # Техники обхода (ключевая информация!)
         if details.get('dpi_techniques'):
-            lines.append("   DPI техники:")
+            lines.append("   Техники обхода:")
             for tech in details['dpi_techniques'][:8]:
                 lines.append(f"      • {tech}")
             if len(details['dpi_techniques']) > 8:

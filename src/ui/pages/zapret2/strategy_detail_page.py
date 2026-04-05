@@ -613,7 +613,7 @@ class StrategyDetailPage(BasePage):
         self._tcp_phase_custom_args: dict[str, str] = {}  # phase_key -> raw args chunk (if no matching strategy)
         self._tcp_hide_fake_phase = False
         self._tcp_last_enabled_args_by_target: dict[str, str] = {}
-        self._waiting_for_process_start = False  # Флаг ожидания запуска DPI
+        self._waiting_for_process_start = False  # Флаг ожидания запуска Zapret
         self._process_monitor_connected = False  # Флаг подключения к process_monitor
         self._apply_feedback_timer = None  # Быстрый таймер: убрать спиннер после apply
         self._strategies_load_timer = None
@@ -666,7 +666,7 @@ class StrategyDetailPage(BasePage):
         # Close hover/pinned preview when the main window hides/deactivates (e.g. tray).
         QTimer.singleShot(0, self._install_main_window_event_filter)
 
-        # Подключаемся к process_monitor для отслеживания статуса DPI
+        # Подключаемся к process_monitor для отслеживания статуса Zapret
         self._connect_process_monitor()
 
     def _install_main_window_event_filter(self) -> None:
@@ -1978,7 +1978,7 @@ class StrategyDetailPage(BasePage):
                     QTimer.singleShot(1000, self._load_strategies)
                 else:
                     self._retry_count = 0
-                    # Если DPI остановлен, не показываем шумное предупреждение "Нет стратегий".
+                    # Если Zapret остановлен, не показываем шумное предупреждение "Нет стратегий".
                     # В этот момент чаще всего идёт смена режима/перезапуск.
                     if (not self._is_dpi_running_now()) or (not self.isVisible()):
                         log(
@@ -3864,7 +3864,7 @@ class StrategyDetailPage(BasePage):
                 self._breadcrumb.clear()
                 self._breadcrumb.addItem("control", self._tr("page.z2_strategy_detail.breadcrumb.control", "Управление"))
                 self._breadcrumb.addItem(
-                    "strategies", self._tr("page.z2_strategy_detail.breadcrumb.strategies", "Стратегии DPI")
+                    "strategies", self._tr("page.z2_strategy_detail.breadcrumb.strategies", "Стратегии Zapret")
                 )
                 detail = ""
                 try:
@@ -3879,7 +3879,7 @@ class StrategyDetailPage(BasePage):
                 self._breadcrumb.blockSignals(False)
 
         if getattr(self, "_parent_link", None) is not None:
-            self._parent_link.setText(self._tr("page.z2_strategy_detail.back.strategies", "Стратегии DPI"))
+            self._parent_link.setText(self._tr("page.z2_strategy_detail.back.strategies", "Стратегии Zapret"))
 
         if getattr(self, "_title", None) is not None:
             target_title = ""

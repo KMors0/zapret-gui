@@ -420,7 +420,7 @@ class HomePage(BasePage):
         cards_layout.setSpacing(12)
         cards_layout.setContentsMargins(0, 0, 0, 0)
         
-        # Карточка статуса DPI
+        # Карточка статуса Zapret
         self.dpi_status_card = StatusCard("fa5s.shield-alt", tr_catalog("page.home.card.dpi.title", language=self._ui_language, default="Статус Zapret"))
         self.dpi_status_card.set_value(
             tr_catalog("page.home.status.checking", language=self._ui_language, default="Проверка..."),
@@ -534,11 +534,11 @@ class HomePage(BasePage):
         self.subscription_card.clicked.connect(self.navigate_to_premium.emit)
 
     def _start_dpi(self) -> None:
-        """Локальный обработчик запуска DPI для кнопки на главной."""
+        """Локальный обработчик запуска Zapret для кнопки на главной."""
         _start_dpi_action(self)
 
     def _stop_dpi(self) -> None:
-        """Локальный обработчик остановки DPI для кнопки на главной."""
+        """Локальный обработчик остановки Zapret для кнопки на главной."""
         _stop_dpi_action(self)
 
     def _open_connection_test(self) -> None:
@@ -550,7 +550,7 @@ class HomePage(BasePage):
         _open_folder_action(self)
         
     def update_dpi_status(self, is_running: bool, strategy_name: str | None = None):
-        """Обновляет отображение статуса DPI"""
+        """Обновляет отображение статуса Zapret"""
         if is_running:
             self.dpi_status_card.set_value(
                 tr_catalog("page.home.status.running", language=self._ui_language, default="Запущен"),

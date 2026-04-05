@@ -1300,8 +1300,8 @@ class DPIController:
             self._restart_active_start_generation = 0
 
         if running:
-            log("DPI запущен асинхронно", "INFO")
-            self.app.set_status("✅ DPI успешно запущен")
+            log("Zapret запущен асинхронно", "INFO")
+            self.app.set_status("✅ Zapret успешно запущен")
 
             # Один вызов ui_manager — process_monitor_manager подхватит через свой поток
             if hasattr(self.app, 'ui_manager'):
@@ -1329,7 +1329,7 @@ class DPIController:
                 QTimer.singleShot(150, lambda text=warning_text: self._show_launch_warning_top(text))
         else:
             # Процесс не запустился или сразу упал
-            log("DPI не запустился - процесс не найден после старта", "❌ ERROR")
+            log("Winws не запустился - процесс не найден после старта", "❌ ERROR")
             self.app.set_status("❌ Процесс не запустился. Проверьте логи")
             self._show_launch_error_top("Процесс не запустился. Проверьте логи")
 
@@ -1344,7 +1344,7 @@ class DPIController:
             QTimer.singleShot(0, self._process_pending_direct_preset_switch)
 
     def _on_dpi_stop_finished(self, success, error_message):
-        """Обрабатывает завершение асинхронной остановки DPI"""
+        """Обрабатывает завершение асинхронной остановки winws"""
         restart_generation_after_stop = int(self._restart_pending_stop_generation or 0)
         try:
             store = getattr(self.app, "ui_state_store", None)
@@ -1359,11 +1359,11 @@ class DPIController:
                 is_still_running = self.app.dpi_starter.check_process_running_wmi(silent=True)
                 
                 if not is_still_running:
-                    log("DPI остановлен асинхронно", "INFO")
+                    log("Zapret остановлен асинхронно", "INFO")
                     if error_message:
                         self.app.set_status(f"✅ {error_message}")
                     else:
-                        self.app.set_status("✅ DPI успешно остановлен")
+                        self.app.set_status("✅ Zapret успешно остановлен")
                     
                     # ✅ ИСПОЛЬЗУЕМ UI MANAGER вместо app.update_ui
                     if hasattr(self.app, 'ui_manager'):
@@ -1383,7 +1383,7 @@ class DPIController:
                         return
                 else:
                     # Процесс всё ещё работает
-                    log("DPI всё ещё работает после попытки остановки", "⚠ WARNING")
+                    log("Zapret всё ещё работает после попытки остановки", "⚠ WARNING")
                     self.app.set_status("⚠ Процесс всё ещё работает")
                     
                     if hasattr(self.app, 'ui_manager'):
@@ -1394,7 +1394,7 @@ class DPIController:
                     self._restart_pending_stop_generation = 0
                 
             else:
-                log(f"Ошибка асинхронной остановки DPI: {error_message}", "❌ ERROR")
+                log(f"Ошибка асинхронной остановки Zapret: {error_message}", "❌ ERROR")
                 self.app.set_status(f"❌ Ошибка остановки: {error_message}")
                 
                 # Проверяем реальный статус процесса
@@ -1411,7 +1411,7 @@ class DPIController:
                 self._restart_pending_stop_generation = 0
                 
         except Exception as e:
-            log(f"Ошибка при обработке результата остановки DPI: {e}", "❌ ERROR")
+            log(f"Ошибка при обработке результата остановки Zapret: {e}", "❌ ERROR")
             self.app.set_status(f"Ошибка: {e}")
         finally:
             if self._direct_preset_switch_requested_generation > self._direct_preset_switch_completed_generation:
@@ -1449,7 +1449,7 @@ class DPIController:
                 QTimer.singleShot(0, self._process_pending_direct_preset_switch)
     
     def _on_stop_and_exit_finished(self):
-        """Завершает приложение после остановки DPI"""
+        """Завершает приложение после остановки Zapret"""
         self.app.set_status("Завершение...")
         from PyQt6.QtWidgets import QApplication
 
@@ -1465,10 +1465,10 @@ class DPIController:
         """Очищает все потоки при закрытии приложения"""
         try:
             if self._dpi_start_thread and self._dpi_start_thread.isRunning():
-                log("Останавливаем поток запуска DPI...", "DEBUG")
+                log("Останавливаем поток запуска Zapret...", "DEBUG")
                 self._dpi_start_thread.quit()
                 if not self._dpi_start_thread.wait(2000):
-                    log("⚠ Поток запуска DPI не завершился, принудительно завершаем", "WARNING")
+                    log("⚠ Поток запуска Zapret не завершился, принудительно завершаем", "WARNING")
                     try:
                         self._dpi_start_thread.terminate()
                         self._dpi_start_thread.wait(500)
@@ -1476,10 +1476,10 @@ class DPIController:
                         pass
             
             if self._dpi_stop_thread and self._dpi_stop_thread.isRunning():
-                log("Останавливаем поток остановки DPI...", "DEBUG")
+                log("Останавливаем поток остановки Zapret...", "DEBUG")
                 self._dpi_stop_thread.quit()
                 if not self._dpi_stop_thread.wait(2000):
-                    log("⚠ Поток остановки DPI не завершился, принудительно завершаем", "WARNING")
+                    log("⚠ Поток остановки Zapret не завершился, принудительно завершаем", "WARNING")
                     try:
                         self._dpi_stop_thread.terminate()
                         self._dpi_stop_thread.wait(500)
@@ -1491,11 +1491,11 @@ class DPIController:
             self._dpi_stop_thread = None
 
         except Exception as e:
-            log(f"Ошибка при очистке потоков DPI контроллера: {e}", "❌ ERROR")
+            log(f"Ошибка при очистке потоков Zapret контроллера: {e}", "❌ ERROR")
 
     def is_running(self) -> bool:
         """
-        Проверяет запущен ли DPI процесс.
+        Проверяет запущен ли winws процесс.
 
         Returns:
             True если процесс запущен, False иначе
@@ -1504,7 +1504,7 @@ class DPIController:
 
     def restart_dpi_async(self):
         """
-        Перезапускает DPI по модели "последний запрос побеждает".
+        Перезапускает winws по модели "последний запрос побеждает".
 
         Старые запросы не исполняются повторно: если пользователь быстро
         переключает пресеты, мы запоминаем только последнее поколение
@@ -1512,7 +1512,7 @@ class DPIController:
         """
         self._restart_request_generation += 1
         log(
-            f"Перезапуск DPI запросили, актуальное поколение {self._restart_request_generation}",
+            f"Перезапуск Zapret запросили, актуальное поколение {self._restart_request_generation}",
             "INFO",
         )
         self._process_pending_restart_request()

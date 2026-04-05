@@ -72,8 +72,8 @@ TEXTS: dict[str, dict[str, str]] = {
         "en": "Orchestrator Settings",
     },
     "nav.page.dpi_settings": {
-        "ru": "Сменить режим DPI",
-        "en": "DPI Mode",
+        "ru": "Сменить режим Zapret",
+        "en": "Change Zapret mode",
     },
     "nav.page.autostart": {
         "ru": "Автозапуск",
@@ -224,8 +224,8 @@ TEXTS: dict[str, dict[str, str]] = {
         "en": "Active strategy",
     },
     "page.control.setting.autostart.title": {
-        "ru": "Автозагрузка DPI",
-        "en": "DPI Autostart",
+        "ru": "Автозапуск Zapret",
+        "en": "Zapret autostart",
     },
     "page.control.setting.autostart.desc": {
         "ru": "Запускать Zapret автоматически при старте программы",
@@ -360,8 +360,8 @@ TEXTS: dict[str, dict[str, str]] = {
         "en": "Open",
     },
     "page.z1_control.setting.autostart.title": {
-        "ru": "Автозагрузка DPI",
-        "en": "DPI Autostart",
+        "ru": "Автозапуск",
+        "en": "Autostart",
     },
     "page.z1_control.setting.autostart.desc": {
         "ru": "Запускать Zapret автоматически при старте программы",
@@ -544,8 +544,8 @@ TEXTS: dict[str, dict[str, str]] = {
         "en": "Exclusions",
     },
     "page.dpi_settings.title": {
-        "ru": "Настройки DPI",
-        "en": "DPI Settings",
+        "ru": "Настройки Zapret",
+        "en": "Zapret Settings",
     },
     "page.dpi_settings.launch_method": {
         "ru": "Метод запуска стратегий",
@@ -1064,8 +1064,8 @@ TEXTS: dict[str, dict[str, str]] = {
         "en": "Autostart Zapret application",
     },
     "page.autostart.option.gui.desc": {
-        "ru": "Запускает главное окно программы при входе в Windows. Вы сможете управлять DPI из системного трея.",
-        "en": "Starts the main application window on Windows logon. You can control DPI from the system tray.",
+        "ru": "Запускает главное окно программы при входе в Windows. Вы сможете управлять Zapret из системного трея.",
+        "en": "Starts the main application window on Windows logon. You can control Zapret from the system tray.",
     },
     "page.autostart.option.service.title": {
         "ru": "Служба Windows",
@@ -1080,16 +1080,16 @@ TEXTS: dict[str, dict[str, str]] = {
         "en": "Task on user logon",
     },
     "page.autostart.option.logon.desc": {
-        "ru": "Создает задачу планировщика для запуска DPI при входе пользователя в систему.",
-        "en": "Creates a scheduler task to launch DPI when user logs in.",
+        "ru": "Создает задачу планировщика для запуска Zapret при входе пользователя в систему.",
+        "en": "Creates a scheduler task to launch Zapret when user logs in.",
     },
     "page.autostart.option.boot.title": {
         "ru": "Задача при загрузке системы",
         "en": "Task on system boot",
     },
     "page.autostart.option.boot.desc": {
-        "ru": "Создает задачу планировщика для запуска DPI при загрузке Windows (до входа пользователя).",
-        "en": "Creates a scheduler task to launch DPI on Windows boot (before user logon).",
+        "ru": "Создает задачу планировщика для запуска Zapret при загрузке Windows (до входа пользователя).",
+        "en": "Creates a scheduler task to launch Zapret on Windows boot (before user logon).",
     },
     "page.autostart.tip.recommendation": {
         "ru": "Рекомендация: Для максимальной надежности используйте «Служба Windows» — она запускается раньше всех программ и автоматически перезапускается при сбоях.",
@@ -5710,8 +5710,8 @@ TEXTS_PAGES_FINAL: dict[str, dict[str, str]] = {
         "en": "Loading...",
     },
     "page.strategies_base.strategy.autostart_disabled": {
-        "ru": "Автостарт DPI отключен",
-        "en": "Autostart DPI is disabled",
+        "ru": "Автозапуск Zapret отключен",
+        "en": "Autostart Zapret is disabled",
     },
     "page.z2_orchestra_strategies.empty.no_categories": {
         "ru": "Категории не найдены",
@@ -5822,8 +5822,8 @@ TEXTS_PAGES_FINAL: dict[str, dict[str, str]] = {
         "en": "Cancel",
     },
     "page.z2_control.setting.autostart.title": {
-        "ru": "Автозагрузка DPI",
-        "en": "DPI Autostart",
+        "ru": "Автозапуск",
+        "en": "Autostart",
     },
     "page.z2_control.setting.autostart.desc": {
         "ru": "Запускать Zapret автоматически при старте программы",
@@ -5878,8 +5878,8 @@ TEXTS_PAGES_FINAL: dict[str, dict[str, str]] = {
         "en": "Disable MAX Blocking",
     },
     "page.z2_control.strategy.autostart_disabled": {
-        "ru": "Автостарт DPI отключен",
-        "en": "Autostart DPI is disabled",
+        "ru": "Автозапуск Zapret отключен",
+        "en": "Autostart Zapret is disabled",
     },
 }
 

@@ -40,17 +40,17 @@ CONFLICTING_PROCESSES = {
     'ProcessHacker.exe': {
         'name': 'Process Hacker',
         'reason': 'Перехватывает системные вызовы и блокирует WinDivert драйвер',
-        'solution': 'Закройте Process Hacker перед запуском DPI'
+        'solution': 'Закройте Process Hacker перед запуском Zappret'
     },
     'procexp.exe': {
         'name': 'Process Explorer',
         'reason': 'Может конфликтовать с WinDivert драйвером',
-        'solution': 'Закройте Process Explorer перед запуском DPI'
+        'solution': 'Закройте Process Explorer перед запуском Zapret'
     },
     'procexp64.exe': {
         'name': 'Process Explorer (64-bit)',
         'reason': 'Может конфликтовать с WinDivert драйвером',
-        'solution': 'Закройте Process Explorer перед запуском DPI'
+        'solution': 'Закройте Process Explorer перед запуском Zapret'
     },
     'GoodbyeDPI.exe': {
         'name': 'GoodbyeDPI',
@@ -484,7 +484,7 @@ def get_conflicting_processes_report() -> str:
         lines.append(f"   Решение: {conflict['solution']}")
         lines.append("")
     
-    lines.append("Рекомендуется закрыть эти программы перед запуском DPI.")
+    lines.append("Рекомендуется закрыть эти программы перед запуском Zapret.")
     
     return "\n".join(lines)
 

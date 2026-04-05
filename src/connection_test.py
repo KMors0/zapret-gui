@@ -607,10 +607,10 @@ class ConnectionTestWorker(QObject):
             
             self.log_message("⚙️ НАСТРОЙКИ АВТОЗАПУСКА:")
             
-            # Проверяем автозапуск DPI
+            # Проверяем автозапуск Zapret
             dpi_autostart = get_dpi_autostart()
             status_dpi = "✅ Включен" if dpi_autostart else "❌ Отключен"
-            self.log_message(f"   DPI автозапуск: {status_dpi}")
+            self.log_message(f"   Автозапуск Zapret: {status_dpi}")
             
             # Проверяем системный автозапуск
             self._check_system_autostart()

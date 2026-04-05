@@ -1,5 +1,5 @@
 # ui/pages/control_page.py
-"""Страница управления - запуск/остановка DPI"""
+"""Страница управления - запуск/остановка Zapret"""
 
 import os
 
@@ -58,7 +58,7 @@ class StopButton(ActionButton):
 
 
 class ControlPage(BasePage):
-    """Страница управления DPI"""
+    """Страница управления Zapret"""
 
     def __init__(self, parent=None):
         super().__init__(
@@ -263,10 +263,10 @@ class ControlPage(BasePage):
         except Exception:
             Win11ToggleSwitch = None  # type: ignore[assignment]
 
-        # Автозагрузка DPI
+        # Автозапуск Zapret GUI
         auto_row = SettingsRow(
             "fa5s.bolt",
-            tr_catalog("page.control.setting.autostart.title", language=self._ui_language, default="Автозагрузка DPI"),
+            tr_catalog("page.control.setting.autostart.title", language=self._ui_language, default="Автозапуск Zapret GUI"),
             tr_catalog("page.control.setting.autostart.desc", language=self._ui_language, default="Запускать Zapret автоматически при старте программы"),
         )
         self.auto_row = auto_row
@@ -393,7 +393,7 @@ class ControlPage(BasePage):
 
     def _sync_program_settings(self) -> None:
         """Синхронизирует UI с текущими настройками (реестр/система)."""
-        # Автозагрузка DPI
+        # Автозапуск Zapret GUI
         try:
             from config import get_dpi_autostart
             self._set_toggle_checked(self.auto_dpi_toggle, bool(get_dpi_autostart()))
@@ -427,12 +427,12 @@ class ControlPage(BasePage):
             set_dpi_autostart(bool(enabled))
 
             msg = (
-                "DPI будет включаться автоматически при старте программы"
+                "Zapret GUI будет включаться автоматически при старте программы"
                 if enabled
-                else "Автозагрузка DPI отключена"
+                else "Автозапуск Zapret GUI отключена"
             )
             self._set_status(msg)
-            InfoBar.success(title="Автозагрузка DPI", content=msg, parent=self.window())
+            InfoBar.success(title="Автозапуск Zapret GUI", content=msg, parent=self.window())
         finally:
             self._sync_program_settings()
 
@@ -709,7 +709,7 @@ class ControlPage(BasePage):
         )
         self.reset_program_btn.setText(self.reset_program_btn._default_text)
 
-        self.auto_row.set_title(tr_catalog("page.control.setting.autostart.title", language=self._ui_language, default="Автозагрузка DPI"))
+        self.auto_row.set_title(tr_catalog("page.control.setting.autostart.title", language=self._ui_language, default="Автозапуск Zapret GUI"))
         self.auto_row.set_description(
             tr_catalog("page.control.setting.autostart.desc", language=self._ui_language, default="Запускать Zapret автоматически при старте программы")
         )
@@ -792,7 +792,7 @@ class ControlPage(BasePage):
             pass
 
         not_selected = tr_catalog("page.control.strategy.not_selected", language=self._ui_language, default="Не выбрана")
-        if name and name not in ("Автостарт DPI отключен", not_selected):
+        if name and name not in ("Автозапуск отключен", not_selected):
             self.strategy_label.setText(name)
             self.strategy_desc.setText(
                 tr_catalog("page.control.strategy.active", language=self._ui_language, default="Активная стратегия обхода")

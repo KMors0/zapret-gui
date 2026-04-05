@@ -2546,7 +2546,7 @@ class Zapret1UserPresetsPage(BasePage):
             while widget:
                 if hasattr(widget, "dpi_controller"):
                     widget.dpi_controller.restart_dpi_async()
-                    log("DPI перезапущен после смены пресета", "INFO")
+                    log("Zapret перезапущен после смены пресета", "INFO")
                     return
                 widget = widget.parent()
 
@@ -2554,11 +2554,11 @@ class Zapret1UserPresetsPage(BasePage):
             for w in QApplication.topLevelWidgets():
                 if hasattr(w, "dpi_controller"):
                     w.dpi_controller.restart_dpi_async()
-                    log("DPI перезапущен после смены пресета", "INFO")
+                    log("Zapret перезапущен после смены пресета", "INFO")
                     return
 
         except Exception as e:
-            log(f"Ошибка перезапуска DPI: {e}", "ERROR")
+            log(f"Ошибка перезапуска Zapret: {e}", "ERROR")
 
     def _open_presets_info(self):
         """Открывает страницу с информацией о пресетах."""

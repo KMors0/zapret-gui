@@ -228,7 +228,7 @@ class SystemTrayManager:
         exit_only_act.triggered.connect(self.exit_only)
         menu.addAction(exit_only_act)
 
-        exit_stop_act = QAction("Выход и остановить DPI", self.parent)
+        exit_stop_act = QAction("Выход и остановить Zapret", self.parent)
         if HAS_QTAWESOME:
             exit_stop_act.setIcon(qta.icon('fa5s.power-off', color='#e81123'))
         exit_stop_act.triggered.connect(self.exit_and_stop)
@@ -501,23 +501,23 @@ class SystemTrayManager:
     # ------------------------------------------------------------------
     def exit_only(self):
         """Закрывает GUI, процесс winws.exe остаётся запущенным."""
-        # Единая точка выхода: DPI не трогаем.
+        # Единая точка выхода: Zapret не трогаем.
         if hasattr(self.parent, "request_exit"):
             self.parent.request_exit(stop_dpi=False)
             return
 
         # Fallback для старой архитектуры
         from log import log
-        log("Выход без остановки DPI (fallback, только GUI)", level="INFO")
+        log("Выход без остановки Zapret (fallback, только GUI)", level="INFO")
         self.tray_icon.hide()
         QApplication.quit()
 
     # ------------------------------------------------------------------
-    # 2) СТАРОЕ ПОВЕДЕНИЕ – остановить DPI и выйти
+    # 2) СТАРОЕ ПОВЕДЕНИЕ – остановить Zapret и выйти
     # ------------------------------------------------------------------
     def exit_and_stop(self):
         """Останавливает winws.exe, затем закрывает GUI."""
-        # Единая точка выхода: остановить DPI и выйти (учитывает все режимы).
+        # Единая точка выхода: остановить Zapret и выйти (учитывает все режимы).
         if hasattr(self.parent, "request_exit"):
             self.parent.request_exit(stop_dpi=True)
             return
@@ -525,7 +525,7 @@ class SystemTrayManager:
         # Fallback для старой архитектуры
         from dpi.stop import stop_dpi
         from log import log
-        log("Выход + остановка DPI (fallback)", level="INFO")
+        log("Выход + остановка Zapret (fallback)", level="INFO")
         if hasattr(self.parent, 'dpi_starter'):
             stop_dpi(self.parent)
         self.tray_icon.hide()

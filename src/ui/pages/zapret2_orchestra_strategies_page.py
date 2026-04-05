@@ -62,7 +62,7 @@ class Zapret2OrchestraStrategiesPage(BasePage):
     _ROOT_SUBTITLE = (
         "Здесь для каждой категории можно выбрать свою стратегию обхода. "
         "После изменения выбор сразу сохраняется в активный orchestra-пресет "
-        "и применяется к запущенному DPI."
+        "и применяется к запущенному Zapret."
     )
 
     def __init__(self, parent=None):
@@ -776,7 +776,7 @@ class Zapret2OrchestraStrategiesPage(BasePage):
                 self._start_process_monitoring()
                 return
         except Exception as e:
-            log(f"Ошибка перезапуска DPI: {e}", "ERROR")
+            log(f"Ошибка перезапуска Zapret: {e}", "ERROR")
 
         self.show_success()
 
@@ -786,7 +786,7 @@ class Zapret2OrchestraStrategiesPage(BasePage):
             if app and hasattr(app, "dpi_controller") and app.dpi_controller:
                 app.dpi_controller.stop_dpi_async()
         except Exception as e:
-            log(f"Ошибка остановки DPI: {e}", "DEBUG")
+            log(f"Ошибка остановки Zapret: {e}", "DEBUG")
         self.show_success()
 
     def _has_any_active_strategy(self) -> bool:

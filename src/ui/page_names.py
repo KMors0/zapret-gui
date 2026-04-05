@@ -25,7 +25,7 @@ class PageName(Enum):
 
     # === Основные страницы ===
     HOME = auto()                    # Главная
-    CONTROL = auto()                 # Управление DPI
+    CONTROL = auto()                 # Управление Zapret
     ZAPRET2_DIRECT_CONTROL = auto()  # Zapret 2 Direct: управление (главная вкладка в "Стратегии")
     ZAPRET2_DIRECT = auto()          # Zapret 2 Direct стратегии
     ZAPRET2_ORCHESTRA = auto()       # Zapret 2 Orchestra (direct_zapret2_orchestra режим)
@@ -42,7 +42,7 @@ class PageName(Enum):
     HOSTLIST = auto()                # Листы (Hostlist + IPset)
     IPSET = auto()                   # Legacy alias -> Листы
     BLOBS = auto()                   # Блобы
-    DPI_SETTINGS = auto()            # Настройки DPI
+    DPI_SETTINGS = auto()            # Настройки Zapret
     ZAPRET2_USER_PRESETS = auto()      # Zapret 2 Direct: пользовательские пресеты
 
     # === Мои списки ===
@@ -95,7 +95,7 @@ class SectionName(Enum):
     IPSET = auto()                   # - Legacy alias (скрыт в UI)
     BLOBS = auto()                   # - Блобы
     ORCHESTRA_SETTINGS = auto()      # - Настройки оркестратора (вкладки)
-    DPI_SETTINGS = auto()            # - Настройки DPI
+    DPI_SETTINGS = auto()            # - Настройки Zapret
     DIRECT_RUN = auto()              # - Прямой запуск (только direct_zapret2)
 
     # === Мои списки (collapsible группа) ===

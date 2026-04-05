@@ -368,7 +368,7 @@ class BlockcheckPage(BasePage):
             tr_catalog("page.blockcheck.mode_full", default="Полная"), "full"
         )
         self._mode_combo.addItem(
-            tr_catalog("page.blockcheck.mode_dpi", default="Только DPI"), "dpi_only"
+            tr_catalog("page.blockcheck.mode_dpi", default="Только DPI"), "dpi_only" # а тут про Zapret или DPI?
         )
         self._mode_combo.setCurrentIndex(1)  # Default: full
         self._mode_combo.setFixedWidth(160)

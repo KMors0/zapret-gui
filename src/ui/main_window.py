@@ -282,7 +282,7 @@ _NAV_LABELS = {
     PageName.PREMIUM: "Донат",
     PageName.LOGS: "Логи",
     PageName.ABOUT: "О программе",
-    PageName.DPI_SETTINGS: "Сменить режим DPI",
+    PageName.DPI_SETTINGS: "Сменить режим Zapret",
     PageName.HOSTLIST: "Листы",
     PageName.BLOBS: "Блобы",
     PageName.NETROGAT: "Исключения",

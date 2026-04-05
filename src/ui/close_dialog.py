@@ -19,7 +19,7 @@ class CloseDialog(MessageBoxBase):
       - None    -> отмена (Esc / клик мимо)
       - "tray"  -> свернуть в трей
       - False   -> закрыть только GUI
-      - True    -> закрыть GUI + остановить DPI
+      - True    -> закрыть GUI + остановить Zapret
     """
 
     def __init__(self, parent=None):
@@ -32,7 +32,7 @@ class CloseDialog(MessageBoxBase):
         # --- Заголовок и описание ---
         self.titleLabel = SubtitleLabel("Закрыть приложение", self.widget)
         self.bodyLabel = BodyLabel(
-            "DPI обход (winws) продолжит работать в фоне,\n"
+            "Zapret продолжит работать в фоне,\n"
             "если вы закроете только GUI.",
             self.widget,
         )
@@ -64,7 +64,7 @@ class CloseDialog(MessageBoxBase):
         # --- Кнопка "Закрыть и остановить DPI" (danger/red) ---
         self.stopDpiButton = create_dialog_action_button(
             self.widget,
-            text="Закрыть и остановить DPI",
+            text="Закрыть и остановить Zapret",
             icon_name="fa5s.stop-circle",
             icon_color="#ffffff",
             danger=True,

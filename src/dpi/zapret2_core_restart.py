@@ -1,7 +1,7 @@
 """
-dpi/zapret2_core_restart.py - Унифицированный механизм перезапуска DPI для режима direct_zapret2
+dpi/zapret2_core_restart.py - Унифицированный механизм перезапуска Zapret для режима direct_zapret2
 
-Этот модуль предоставляет единый API для перезагрузки DPI сервиса когда настройки
+Этот модуль предоставляет единый API для перезагрузки winws когда настройки
 изменяются в UI (syndata, filter_mode, out_range и т.д.).
 
 Использование:
@@ -42,7 +42,7 @@ def _is_direct_zapret2_mode() -> bool:
 
 def _is_dpi_running(app: 'LupiDPIApp') -> bool:
     """
-    Проверяет запущен ли DPI процесс.
+    Проверяет запущен ли процесс winws.
 
     Args:
         app: Ссылка на главное приложение
@@ -55,7 +55,7 @@ def _is_dpi_running(app: 'LupiDPIApp') -> bool:
             return app.dpi_starter.check_process_running_wmi(silent=True)
         return False
     except Exception as e:
-        log(f"Ошибка проверки состояния DPI: {e}", "DEBUG")
+        log(f"Ошибка проверки состояния Zapret: {e}", "DEBUG")
         return False
 
 
@@ -89,7 +89,7 @@ def trigger_dpi_reload(
     target_key: Optional[str] = None,
 ) -> bool:
     """
-    Унифицированный механизм перезагрузки DPI для режима direct_zapret2.
+    Унифицированный механизм перезагрузки winws для режима direct_zapret2.
 
     НОВАЯ АРХИТЕКТУРА (без реестра):
     - Source preset уже обновлен UI через direct facade / sync layer
@@ -109,7 +109,7 @@ def trigger_dpi_reload(
         target_key: Опциональная категория которая изменилась
 
     Returns:
-        bool: True если перезапуск запущен, False если DPI не запущен или режим не direct_zapret2
+        bool: True если перезапуск запущен, False если winws не запущен или режим не direct_zapret2
     """
     # 1. Проверяем режим
     if not _is_direct_zapret2_mode():
@@ -121,9 +121,9 @@ def trigger_dpi_reload(
         log("trigger_dpi_reload: dpi_controller не найден", "DEBUG")
         return False
 
-    # 3. Проверяем запущен ли DPI
+    # 3. Проверяем запущен ли winws
     if not _is_dpi_running(app):
-        log(f"trigger_dpi_reload: DPI не запущен, перезапуск не требуется", "DEBUG")
+        log(f"trigger_dpi_reload: winws не запущен, перезапуск не требуется", "DEBUG")
         return False
 
     # 4. Проверяем наличие выбранного source-пресета с активными фильтрами
@@ -132,7 +132,7 @@ def trigger_dpi_reload(
         preset_path = get_direct_flow_coordinator().get_selected_source_path("direct_zapret2")
 
         if not preset_path.exists():
-            log("Preset файл не найден - останавливаем DPI", "WARNING")
+            log("Preset файл не найден - останавливаем winws", "WARNING")
             app.dpi_controller.stop_dpi_async()
             return True
 
@@ -141,7 +141,7 @@ def trigger_dpi_reload(
         has_filters = any(f in content for f in ['--wf-tcp-out', '--wf-udp-out', '--wf-raw-part'])
 
         if not has_filters:
-            log("Preset файл не содержит активных фильтров - останавливаем DPI", "INFO")
+            log("Preset файл не содержит активных фильтров - останавливаем winws", "INFO")
             app.dpi_controller.stop_dpi_async()
             return True
 
@@ -164,10 +164,10 @@ def trigger_dpi_reload(
 
 class DPIReloadDebouncer:
     """
-    Debounce механизм для предотвращения частых перезапусков DPI.
+    Debounce механизм для предотвращения частых перезапусков winws.
 
     Используется когда пользователь быстро меняет значения SpinBox или других
-    частоизменяемых контролов. Вместо перезапуска DPI на каждое изменение,
+    частоизменяемых контролов. Вместо перезапуска Zaptre на каждое изменение,
     ждем пока пользователь закончит редактирование.
 
     Интервал по умолчанию: 500ms
@@ -208,7 +208,7 @@ class DPIReloadDebouncer:
 
     def schedule_reload(self, reason: str, target_key: Optional[str] = None):
         """
-        Планирует перезагрузку DPI с debounce.
+        Планирует перезагрузку winws с debounce.
 
         Если вызвать несколько раз за delay_ms миллисекунд - выполнится только
         последний вызов. Это предотвращает спам перезапусков когда пользователь
@@ -232,7 +232,7 @@ class DPIReloadDebouncer:
         self._timer.stop()
         self._timer.start(self._delay_ms)
 
-        log(f"DPI reload запланирован через {self._delay_ms}ms (причина: {reason})", "DEBUG")
+        log("Reload winws запланирован через {self._delay_ms}ms (причина: {reason})", "DEBUG")
 
     def _on_timer_expired(self):
         """Вызывается когда таймер истек - выполняем reload"""

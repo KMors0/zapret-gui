@@ -111,7 +111,7 @@ class BatDPIStart:
             return True
 
     def stop_all_processes(self) -> bool:
-        """Останавливает все процессы DPI через Win API"""
+        """Останавливает все процессы winws через Win API"""
         log("Останавливаем все процессы winws через Win API...", "INFO")
 
         try:

@@ -460,7 +460,7 @@ class LupiDPIApp(ZapretFluentWindow, MainWindowUI, ThemeSubscriptionManager):
             except Exception as e:
                 log(f"Ошибка остановки winws при закрытии: {e}", "DEBUG")
         else:
-            log("Выход без остановки DPI: winws не трогаем", "DEBUG")
+            log("Выход без остановки Zapret: winws не трогаем", "DEBUG")
 
         # Останавливаем все асинхронные операции без уведомлений
         try:
@@ -518,8 +518,8 @@ class LupiDPIApp(ZapretFluentWindow, MainWindowUI, ThemeSubscriptionManager):
     def request_exit(self, stop_dpi: bool) -> None:
         """Единая точка выхода из приложения.
 
-        - stop_dpi=False: закрыть GUI, DPI оставить работать.
-        - stop_dpi=True: остановить DPI и выйти (учитывает текущий launch_method).
+        - stop_dpi=False: закрыть GUI, Zapret оставить работать.
+        - stop_dpi=True: остановить Zapret и выйти (учитывает текущий launch_method).
         """
         from PyQt6.QtWidgets import QApplication
 
@@ -543,7 +543,7 @@ class LupiDPIApp(ZapretFluentWindow, MainWindowUI, ThemeSubscriptionManager):
             pass
 
         if stop_dpi:
-            log("Запрошен выход: остановить DPI и выйти", "INFO")
+            log("Запрошен выход: остановить Zapret и выйти", "INFO")
 
             # Предпочтительно: асинхронная остановка + выход.
             try:
@@ -558,10 +558,10 @@ class LupiDPIApp(ZapretFluentWindow, MainWindowUI, ThemeSubscriptionManager):
                 from dpi.stop import stop_dpi
                 stop_dpi(self)
             except Exception as e:
-                log(f"Ошибка остановки DPI перед выходом: {e}", "WARNING")
+                log(f"Ошибка остановки Zapret перед выходом: {e}", "WARNING")
 
         else:
-            log("Запрошен выход: выйти без остановки DPI", "INFO")
+            log("Запрошен выход: выйти без остановки Zapret", "INFO")
 
         # Закрываем все окна — это вызовет closeEvent с полной очисткой
         # потоков, страниц и менеджеров (т.к. _closing_completely=True).
@@ -606,7 +606,7 @@ class LupiDPIApp(ZapretFluentWindow, MainWindowUI, ThemeSubscriptionManager):
             self.ui_manager.update_ui_state(running)
 
     def delayed_dpi_start(self) -> None:
-        """Выполняет отложенный запуск DPI с проверкой наличия автозапуска"""
+        """Выполняет отложенный запуск Zapret с проверкой наличия автозапуска"""
         if hasattr(self, 'dpi_manager'):
             self.dpi_manager.delayed_dpi_start()
 
@@ -1027,7 +1027,7 @@ class LupiDPIApp(ZapretFluentWindow, MainWindowUI, ThemeSubscriptionManager):
             log(f"Ошибка при переходе на страницу Premium: {e}", level="❌ ERROR")
             
     def open_folder(self) -> None:
-        """Opens the DPI folder."""
+        """Opens the Zapret folder."""
         try:
             run_hidden('explorer.exe .', shell=True)
         except Exception as e:

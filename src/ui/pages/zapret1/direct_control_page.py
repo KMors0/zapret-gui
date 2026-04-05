@@ -289,8 +289,8 @@ class Zapret1DirectControlPage(BasePage):
 
         auto_row = SettingsRow(
             "fa5s.bolt",
-            tr_catalog("page.z1_control.setting.autostart.title", language=self._ui_language, default="Автозагрузка DPI"),
-            tr_catalog("page.z1_control.setting.autostart.desc", language=self._ui_language, default="Запускать Zapret автоматически при старте программы"),
+            tr_catalog("page.z1_control.setting.autostart.title", language=self._ui_language, default="Автозапуск Zapret"),
+            tr_catalog("page.z1_control.setting.autostart.desc", language=self._ui_language, default="Запускать Zapret при старте программы"),
         )
         self.auto_row = auto_row
         self.auto_dpi_toggle = Win11ToggleSwitch() if Win11ToggleSwitch else ActionButton(
@@ -333,8 +333,8 @@ class Zapret1DirectControlPage(BasePage):
             from config import set_dpi_autostart
             set_dpi_autostart(bool(enabled))
             if InfoBar:
-                msg = "DPI будет включаться автоматически" if enabled else "Автозагрузка DPI отключена"
-                InfoBar.success(title="Автозагрузка DPI", content=msg, parent=self.window())
+                msg = "Zapret будет включаться автоматически" if enabled else "Автозапуск Zapret отключена"
+                InfoBar.success(title="Автозапуск Zapret", content=msg, parent=self.window())
         finally:
             self._sync_program_settings()
 
@@ -470,7 +470,7 @@ class Zapret1DirectControlPage(BasePage):
             )
 
         self.auto_row.set_title(
-            tr_catalog("page.z1_control.setting.autostart.title", language=self._ui_language, default="Автозагрузка DPI")
+            tr_catalog("page.z1_control.setting.autostart.title", language=self._ui_language, default="Автозапуск Zapret")
         )
         self.auto_row.set_description(
             tr_catalog("page.z1_control.setting.autostart.desc", language=self._ui_language, default="Запускать Zapret автоматически при старте программы")
